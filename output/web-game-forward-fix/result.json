@@ -1,0 +1,34 @@
+{
+  "foundAlignment": true,
+  "startRoom": "X+",
+  "startFrontWall": {
+    "wallKey": "Z-",
+    "type": "NORMAL",
+    "toRoomId": "Z-",
+    "holeOrientationRaw": {
+      "h": -1,
+      "v": 1
+    },
+    "holeOrientationWall": {
+      "h": -1,
+      "v": 1
+    }
+  },
+  "shuttleProjection": {
+    "h": -1,
+    "v": 1
+  },
+  "startAligned": true,
+  "midMode": "TRAVERSING",
+  "midRoom": "Z-",
+  "midAnimation": {
+    "kind": "TRAVERSE",
+    "progress": 0.5,
+    "toRoomId": "Z-"
+  },
+  "endMode": "PLAYING",
+  "endRoom": "Z-",
+  "expectedRoom": "Z-",
+  "movedToExpectedNeighbor": true,
+  "win": false
+}

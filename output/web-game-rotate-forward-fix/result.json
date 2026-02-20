@@ -1,0 +1,29 @@
+{
+  "controls": {
+    "startOrientation": "1,0,0,0,1,0,0,0,1",
+    "afterLeftOrientation": "0,0,-1,0,1,0,1,0,0",
+    "afterRightOrientation": "1,0,0,0,1,0,0,0,1",
+    "leftThenRightBackToStart": true
+  },
+  "upSpace": {
+    "beforeRoom": "Y-",
+    "beforeFrontWall": {
+      "wallKey": "X+",
+      "type": "NORMAL",
+      "toRoomId": "X+",
+      "holeOrientationRaw": {
+        "h": -1,
+        "v": 1
+      },
+      "holeOrientationWall": {
+        "h": -1,
+        "v": 1
+      }
+    },
+    "beforeAlignment": false,
+    "afterRoom": "Y-",
+    "afterWin": false,
+    "changedRoom": false
+  },
+  "traverseResult": null
+}

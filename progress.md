@@ -1,0 +1,88 @@
+Original prompt: Build a first person maze game played on the (3D) cubical faces of a four dimensional cube with a Tron-like feel, with cubic rooms, rails, an L-shaped shuttle and L-shaped wall holes, one one-way exit in the red room, rotation/traverse controls, neon glow/fog aesthetics, randomized fixed hole orientations per run, and strict alignment rules.
+
+## Progress Log
+- Initialized Vite + Three.js + Vitest scaffold (`package.json`, `index.html`, source/test directories).
+- Next: implement topology, maze generation, orientation math, renderer, game state, UI overlays, and test hooks.
+- Implemented core modules:
+  - `src/game/topology.js` true tesseract connectivity + reciprocal wall vectors.
+  - `src/game/maze.js` seeded maze generation with one-way exit and mirrored hole orientations.
+  - `src/game/orientation.js` discrete 90° orientation matrix math.
+  - `src/render/scene.js` Three.js scene + bloom + fog.
+  - `src/render/room.js` cubic rooms, rails, neon edges, true L-hole cutouts.
+  - `src/render/shuttle.js` pearly-white 3-cylinder shuttle.
+  - `src/game/Game.js` controls, alignment gating, traversal animation, win condition, hooks.
+  - `src/ui/overlay.js` minimal HUD/start/win panels.
+  - `src/main.js` app bootstrap, game loop, fullscreen toggle, test hooks.
+- Added unit tests for topology, maze invariants, and orientation transforms.
+- Verification completed:
+  - `npm test` passed (7 tests across topology/maze/orientation).
+  - `npm run build` passed.
+  - Ran Playwright skill client against dev server (`output/web-game/*`, `output/web-game-traverse/*`).
+  - Inspected screenshots (`shot-0.png`, `shot-2.png`, `output/web-game-traverse/shot-0.png`) and text state output.
+  - Confirmed via scripted Playwright probe that alignment can occur and traversal changes rooms.
+- Observed build note: bundled JS is >500 kB (single chunk); acceptable for V1 but could be optimized later with code-splitting.
+- Suggested next iteration TODOs:
+  - Add a solvability filter/generator (currently intentionally unsolvable in some runs).
+  - Add an optional debug HUD toggle for orientation signatures and wall IDs.
+  - Add automated integration test for one-way exit win path.
+- Patched camera target to shuttle center (`src/render/scene.js`) to satisfy centered-camera requirement.
+- Re-ran tests/build after patch; both still pass.
+- Re-ran Playwright skill client after patch (`output/web-game-postfix/*`) and visually verified screenshot/state output.
+- User-requested camera/gameplay refinements:
+  - Kept camera inside room and tuned close-behind framing.
+  - Reduced shuttle physical size and glow footprint in `src/render/shuttle.js`.
+  - Fixed traverse direction source in `src/game/Game.js`: now uses front-wall world normal instead of camera forward vector to avoid sideways/backward drift.
+  - Slowed traversal speed to ~half by setting `traverseMs` to `1300` (defaults + main config).
+- Verification:
+  - `npm test` and `npm run build` both pass after changes.
+  - Playwright screenshot pass confirms smaller shuttle framing (`output/web-game-shuttle-smaller/shot-0.png`).
+  - Playwright scripted state check confirms half-speed traversal timing (`progress: 0.5` at 650ms) and successful room transfer in wall-normal direction.
+- Fixed room-edge visibility by adding explicit neon tube edges inside the wall boundary (`makeRoomEdgeGlow`) in `src/render/room.js`.
+- Fixed alignment logic in `src/game/Game.js`:
+  - Front wall is now determined by shuttle-forward axis, not camera-forward offset.
+  - Shuttle L-orientation is computed in the active wall basis (`u`,`v`) from shuttle arm axes, then compared directly to hole wall orientation.
+- Forward traversal now consistently uses that front wall normal, so `Space` moves through the intended forward wall.
+- Validation:
+  - `npm test` and `npm run build` pass.
+  - Screenshots confirm visible glowing room edges (`output/web-game-fix-edges-align/shot-0.png`, `shot-1.png`).
+  - Automated Playwright probe confirms aligned traverse moves to expected adjacent room (`expectedRoom == endRoom`).
+- Addressed residual traversal issues from user feedback:
+  - Front-wall selection now follows current view direction (`camera.getWorldDirection`) so `Space` uses the wall the player is facing.
+  - Reworked room-to-room traverse displacement to half-room staging per phase (first half: current room shifts by half-room; second half: adjacent room moves from half-room to center) to eliminate apparent double-room jump.
+  - Kept alignment check tied to wall-local shuttle-vs-hole orientation match.
+- Verification:
+  - `npm test` and `npm run build` pass.
+  - Automated traverse probe: when aligned, `endRoom` equals `frontWall.toRoomId`.
+  - Captured visual artifacts in `output/web-game-forward-fix/`.
+- User-requested control/orientation changes:
+  - Swapped left/right rotation directions (`ArrowLeft` now rotates left, `ArrowRight` rotates right).
+  - Shuttle now rotates with the room every frame (quaternion synced to room rig).
+  - Front-wall and traversal-forward logic now anchored to shuttle-forward axis rather than camera-facing vector.
+  - Alignment logic updated to use rotated shuttle arm axes in world space when matching hole orientation.
+- Visual update:
+  - Increased camera diagonal offset and reduced bloom slightly so depth/perspective reads better.
+  - Added subtle emissive tip spheres to each shuttle arm for clearer 3-arm visibility.
+- Validation:
+  - `npm test` and `npm run build` pass.
+  - Playwright run artifacts show 3-arm shuttle in perspective: `output/web-game-user-change-fix/shot-0.png`, `shot-1.png`.
+  - Automated aligned-traverse check confirms movement lands in expected neighbor room.
+- Investigated screenshot-reported false misalignment; found front-wall selection could pick floor/ceiling in oblique camera compositions.
+- Updated front-wall selector to choose the wall whose center is closest to screen center (among walls in front of camera), with forward-dot tie-breaker.
+- Kept alignment comparison in camera-projected orientation space for the selected front wall.
+- Verification:
+  - `npm test` and `npm run build` pass.
+  - New Playwright captures show expected alignment detection in previously ambiguous compositions (`output/web-game-align-fix-3/*`).
+- Fixed traversal-space bug causing asymmetrical forward/backward perception across reciprocal transitions:
+  - Traversal direction now uses `frontWall.normalLocal` (roomRig local space) instead of `normalWorld`, preventing double-rotation when applying mesh local transforms.
+- Additional front-wall refinement from screenshot feedback:
+  - Front wall is chosen by nearest projected wall-center to screen center among walls in front of camera; this avoids selecting floor/ceiling in oblique views.
+- Validation:
+  - `npm test` and `npm run build` pass.
+  - Playwright post-fix captures and state confirm stable front-wall selection/alignment output (`output/web-game-align-fix-3/*`, `output/web-game-local-traverse-fix/*`).
+- Fixed post-"pan up" traversal deadlock risk:
+  - Alignment probe now evaluates all forward-visible walls (sorted by screen-center proximity) and picks an aligned wall when one exists.
+  - If none are aligned, it falls back to the closest visible wall for status display.
+  - This avoids false lockout when a neighboring visible wall is aligned but not the single initially-selected front wall.
+- Validation:
+  - `npm test` + `npm run build` pass.
+  - 60-trial Playwright stress check (press Up first, then random rotations) achieved 60/60 successful align+traverse transitions.
