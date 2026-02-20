@@ -73,6 +73,7 @@ function makeGlowSegment(start, end, color, radius = 0.04, opacity = 1) {
     opacity,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
+    toneMapped: false,
   });
   const mesh = new THREE.Mesh(geometry, material);
   mesh.position.copy(start).add(end).multiplyScalar(0.5);
@@ -115,27 +116,11 @@ function makeHoleOutline(orientation, color, zOffset = 0.03) {
   const pointVectors = points.map(([x, y]) => new THREE.Vector3(x, y, zOffset));
   pointVectors.push(pointVectors[0].clone());
   for (let i = 0; i < pointVectors.length - 1; i += 1) {
-    group.add(makeGlowSegment(pointVectors[i], pointVectors[i + 1], color, 0.04, 0.98));
+    // Two-pass outline preserves hue while still giving neon bloom.
+    group.add(makeGlowSegment(pointVectors[i], pointVectors[i + 1], color, 0.028, 0.9));
+    group.add(makeGlowSegment(pointVectors[i], pointVectors[i + 1], color, 0.055, 0.16));
   }
   return group;
-}
-
-function makeHoleFill(orientation, color, zOffset = 0.022) {
-  const points = lPolygonPoints(orientation, ROOM_SIZE * 0.28, ROOM_SIZE * 0.14);
-  const shape = new THREE.Shape(points.map(([x, y]) => new THREE.Vector2(x, y)));
-  const fill = new THREE.Mesh(
-    new THREE.ShapeGeometry(shape),
-    new THREE.MeshBasicMaterial({
-      color,
-      transparent: true,
-      opacity: 0.42,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-    }),
-  );
-  fill.position.z = zOffset;
-  return fill;
 }
 
 function wallHoleColorHex(wallState) {
@@ -180,9 +165,6 @@ export function createRoomMesh(roomId, wallStates) {
 
     if (wallState.type !== 'NONE' && wallState.orientation) {
       const holeColor = wallHoleColorHex(wallState);
-      if (wallState.type === 'EXIT') {
-        wallGroup.add(makeHoleFill(wallState.orientation, holeColor));
-      }
       wallGroup.add(makeHoleOutline(wallState.orientation, holeColor));
     }
 
