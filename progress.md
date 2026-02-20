@@ -208,3 +208,47 @@ Original prompt: Build a first person maze game played on the (3D) cubical faces
   - Ran deterministic Playwright probe from skill scripts environment:
     - confirmed front-wall target changes after turn (`frontChanged: true`),
     - confirmed aligned `Space` traversal lands in expected room (`actual === expected`).
+- Implemented solver-backed maze generation for solvable, hard seeds:
+  - Added `/Users/davidbachman/Documents/HyperCube/src/game/mazeEvaluator.js` with deterministic state-space evaluation that mirrors runtime controls:
+    - state = `(roomId, viewOrientation, transportOrientation)`
+    - actions = Left/Right/Up/Down rotations + aligned Space traversal
+    - front-wall selection via max dot against fixed camera-forward vector
+    - strict `(h,v)` alignment check using shuttle-vs-wall basis projection
+    - non-exit traversal transport update with `getTraversalTransportMatrix`
+    - outputs: `solvable`, `shortestSteps`, `reachableStateCount`, `holonomyPreferenceScore`, `goalPathMultiplicity`
+  - Refactored `/Users/davidbachman/Documents/HyperCube/src/game/maze.js`:
+    - `generateMaze({ seed, generation })` now runs deterministic seeded beam+mutation search over orientation candidates.
+    - Search mutates wall-pair orientations and (optionally) start/exit placement.
+    - Fallback policy implemented: target bucket (`>=targetSteps`), then fallback bucket (`>=fallbackSteps`), then best feasible solved candidate.
+    - Always enforces solvability; includes deterministic solvable fallback attempts if search pool had no solved candidate.
+    - Added `generationInfo` diagnostics in return payload:
+      - `targetStepsRequested`, `targetStepsUsed`, `shortestSteps`, `holonomyPreferenceScore`, `reachableStateCount`, `goalPathMultiplicity`, `searchMs`, `clamped`, `evaluations`, `candidatePoolSize`.
+- Tests:
+  - Added `/Users/davidbachman/Documents/HyperCube/tests/mazeEvaluator.test.js` with evaluator-focused coverage:
+    - front-wall selection rule
+    - hand-verified tiny shortest-path cases
+    - traversal transport matrix update behavior
+    - aligned EXIT requirement
+  - Extended `/Users/davidbachman/Documents/HyperCube/tests/maze.test.js`:
+    - generated mazes are solvable across fixed seeds
+    - generation diagnostics correctness
+    - constrained-budget fallback/clamp policy behavior
+    - deterministic sample-seed regression for solvability + invariants + non-zero holonomy sample share
+- Updated `/Users/davidbachman/Documents/HyperCube/AGENTS.md` design notes to reflect solver-backed solvable generation and fallback difficulty clamping.
+- Validation:
+  - `npm test` passes (5 files, 17 tests).
+  - `npm run build` passes.
+  - Playwright runtime verification (custom script) passed:
+    - turning changes front-wall target (`frontChanged: true`)
+    - aligned normal traversals land at `frontWall.toRoomId` (`allTraversesMatched: true`)
+    - exit path reaches `WIN` (`finalMode: WIN`, `win: true`)
+  - Additional screenshot/state smoke capture via web-game client:
+    - `/Users/davidbachman/Documents/HyperCube/output/solver-backed-generation-smoke/shot-0.png`
+    - `/Users/davidbachman/Documents/HyperCube/output/solver-backed-generation-smoke/state-0.json`
+- Post-cleanup validation rerun:
+  - `npm test` passed (17 tests).
+  - `npm run build` passed.
+  - Playwright interaction verification rerun succeeded:
+    - front wall retargets after turn (`frontChanged: true`),
+    - aligned normal traversals land in expected destination room,
+    - aligned EXIT + Space reaches `WIN`.

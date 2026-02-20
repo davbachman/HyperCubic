@@ -95,7 +95,9 @@ The player controls camera-relative room rotations and traverses L-shaped wall h
   - every wall state's `toRoomId/toWallKey` must match `getNeighbor`.
 
 ## Known Intentional Design Decisions
-- V1 maze is randomized once per run and can be unsolvable.
+- V1 maze generation is solver-backed, deterministic by seed, and always returns a solvable maze.
+- Difficulty target defaults to `22+` shortest keypresses with in-budget fallback clamping (`22` -> `16` -> best feasible).
+- Holonomy-rich solutions are preferred but not strictly required for acceptance.
 - Room transitions apply a discrete transport step so left-turn movement combinatorics match tesseract face transport.
 - Opposite-color pairs like `X+` (yellow) and `X-` (blue) are opposite tesseract cells, not direct neighbors.
 

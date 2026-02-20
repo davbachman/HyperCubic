@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { generateMaze } from '../src/game/maze.js';
+import { evaluateMaze } from '../src/game/mazeEvaluator.js';
 import { EXIT_ROOM_ID, canonicalWallPair, getNeighbor, getWallsForRoom } from '../src/game/topology.js';
 
 describe('maze generation', () => {
@@ -72,4 +73,88 @@ describe('maze generation', () => {
       }
     }
   });
+
+  it('returns solvable mazes with generation diagnostics', () => {
+    const seeds = [11, 33, 77, 121, 909];
+
+    for (const seed of seeds) {
+      const maze = generateMaze({ seed });
+      const evaluation = evaluateMaze(maze);
+      expect(evaluation.solvable).toBe(true);
+      expect(maze.generationInfo.shortestSteps).toBe(evaluation.shortestSteps);
+      expect(maze.generationInfo.shortestSteps).toBeGreaterThanOrEqual(maze.generationInfo.targetStepsUsed);
+      expect(maze.generationInfo.targetStepsRequested).toBe(22);
+      expect(typeof maze.generationInfo.searchMs).toBe('number');
+      expect(maze.generationInfo.evaluations).toBeGreaterThan(0);
+    }
+  });
+
+  it('applies fallback/clamp policy under constrained generation budgets', () => {
+    const maze = generateMaze({
+      seed: 2026,
+      generation: {
+        targetSteps: 40,
+        fallbackSteps: 20,
+        timeBudgetMs: 10,
+      },
+    });
+
+    const info = maze.generationInfo;
+    expect(info.targetStepsRequested).toBe(40);
+    expect(info.shortestSteps).toBeGreaterThanOrEqual(info.targetStepsUsed);
+
+    if (info.shortestSteps >= 40) {
+      expect(info.targetStepsUsed).toBe(40);
+      expect(info.clamped).toBe(false);
+      return;
+    }
+
+    expect(info.clamped).toBe(true);
+    if (info.shortestSteps >= 20) {
+      expect(info.targetStepsUsed).toBe(20);
+    } else {
+      expect(info.targetStepsUsed).toBe(info.shortestSteps);
+    }
+  });
+
+  it(
+    'stays solvable and invariant-safe across deterministic sample seeds',
+    () => {
+      const sampleCount = 40;
+      let holonomyPositiveCount = 0;
+
+      for (let seed = 1; seed <= sampleCount; seed += 1) {
+        const maze = generateMaze({ seed });
+        const evaluation = evaluateMaze(maze);
+        expect(evaluation.solvable).toBe(true);
+
+        if (evaluation.holonomyPreferenceScore > 0) {
+          holonomyPositiveCount += 1;
+        }
+
+        let exitCount = 0;
+        let noneCount = 0;
+        for (const [roomId, room] of Object.entries(maze.rooms)) {
+          for (const [wallKey, wall] of Object.entries(room.walls)) {
+            const neighbor = getNeighbor(roomId, wallKey);
+            expect(wall.toRoomId).toBe(neighbor.roomId);
+            expect(wall.toWallKey).toBe(neighbor.wallKey);
+            if (wall.type === 'EXIT') {
+              exitCount += 1;
+              expect(roomId).toBe(EXIT_ROOM_ID);
+            }
+            if (wall.type === 'NONE') {
+              noneCount += 1;
+            }
+          }
+        }
+
+        expect(exitCount).toBe(1);
+        expect(noneCount).toBe(1);
+      }
+
+      expect(holonomyPositiveCount).toBeGreaterThan(0);
+    },
+    20_000,
+  );
 });
