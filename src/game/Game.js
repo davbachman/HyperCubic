@@ -2,15 +2,18 @@ import * as THREE from 'three';
 import { generateMaze } from './maze.js';
 import {
   ROOM_COLORS,
+  getTraversalTransportMatrix,
   getWallBasis,
   getWallVector,
   getWallsForRoom,
+  invertOrthonormalMatrix,
 } from './topology.js';
 import {
   IDENTITY_MATRIX,
   applyMatrixToVector,
   matrixSignature,
   matrixToQuaternion,
+  multiplyMatrices,
   rotateWorld,
 } from './orientation.js';
 import { ROOM_HALF_SIZE, createRoomMesh } from '../render/room.js';
@@ -66,6 +69,9 @@ export function createGame(config) {
 
   const roomRig = new THREE.Group();
   scene.add(roomRig);
+  const transportRig = new THREE.Group();
+  transportRig.matrixAutoUpdate = false;
+  roomRig.add(transportRig);
 
   const roomMeshes = new Map();
   for (const roomId of Object.keys(maze.rooms)) {
@@ -74,29 +80,37 @@ export function createGame(config) {
 
   let currentRoomId = maze.startRoomId;
   let activeRoomMesh = roomMeshes.get(currentRoomId);
-  roomRig.add(activeRoomMesh);
+  transportRig.add(activeRoomMesh);
 
   const shuttle = createShuttle();
-  scene.add(shuttle);
+  transportRig.add(shuttle);
 
   let mode = MODES.START;
-  let orientation = [...IDENTITY_MATRIX];
-  roomRig.quaternion.copy(matrixToQuaternion(orientation));
+  let viewOrientation = [...IDENTITY_MATRIX];
+  let transportOrientation = [...IDENTITY_MATRIX];
+  roomRig.quaternion.copy(matrixToQuaternion(viewOrientation));
 
   let rotationAnim = null;
   let traverseAnim = null;
   const cameraForward = new THREE.Vector3();
-  const wallCenterVec = new THREE.Vector3();
-  const wallViewVec = new THREE.Vector3();
-  const projectedVec = new THREE.Vector3();
+
+  function getEffectiveOrientation() {
+    return multiplyMatrices(viewOrientation, transportOrientation);
+  }
+
+  function syncTransportRigMatrix() {
+    transportRig.matrix.set(
+      transportOrientation[0], transportOrientation[1], transportOrientation[2], 0,
+      transportOrientation[3], transportOrientation[4], transportOrientation[5], 0,
+      transportOrientation[6], transportOrientation[7], transportOrientation[8], 0,
+      0, 0, 0, 1,
+    );
+    transportRig.matrixWorldNeedsUpdate = true;
+  }
 
   function updateRoomFog(roomId) {
     const base = new THREE.Color(ROOM_COLORS[roomId].hex);
     scene.fog.color.copy(base.multiplyScalar(0.17));
-  }
-
-  function syncShuttleRotation() {
-    shuttle.quaternion.copy(roomRig.quaternion);
   }
 
   function refreshCameraBasis() {
@@ -105,40 +119,31 @@ export function createGame(config) {
 
   function getWallCandidates() {
     refreshCameraBasis();
+    const effectiveOrientation = getEffectiveOrientation();
 
     const candidates = [];
 
     for (const wallKey of getWallsForRoom(currentRoomId)) {
       const normalLocal = getWallVector(currentRoomId, wallKey);
-      const normalWorld = applyMatrixToVector(orientation, normalLocal);
-      wallCenterVec
-        .set(normalWorld[0], normalWorld[1], normalWorld[2])
-        .multiplyScalar(ROOM_HALF_SIZE);
-      wallViewVec.copy(wallCenterVec).sub(camera.position).normalize();
-      const forwardDot = wallViewVec.dot(cameraForward);
+      const normalWorld = applyMatrixToVector(effectiveOrientation, normalLocal);
+      const forwardDot =
+        normalWorld[0] * cameraForward.x +
+        normalWorld[1] * cameraForward.y +
+        normalWorld[2] * cameraForward.z;
       if (forwardDot <= 0.05) {
         continue;
       }
-
-      projectedVec.copy(wallCenterVec).project(camera);
-      const distanceSq = projectedVec.x * projectedVec.x + projectedVec.y * projectedVec.y;
 
       candidates.push({
         wallKey,
         normalLocal,
         normalWorld,
         forwardDot,
-        distanceSq,
-        score: -distanceSq,
+        score: forwardDot,
       });
     }
 
-    candidates.sort((a, b) => {
-      if (Math.abs(a.distanceSq - b.distanceSq) > 1e-6) {
-        return a.distanceSq - b.distanceSq;
-      }
-      return b.forwardDot - a.forwardDot;
-    });
+    candidates.sort((a, b) => b.forwardDot - a.forwardDot);
 
     return candidates;
   }
@@ -247,7 +252,7 @@ export function createGame(config) {
       return;
     }
 
-    const targetMatrix = rotateWorld(orientation, axis, direction);
+    const targetMatrix = rotateWorld(viewOrientation, axis, direction);
 
     rotationAnim = {
       elapsedMs: 0,
@@ -282,12 +287,14 @@ export function createGame(config) {
     const travelDistance = ROOM_HALF_SIZE;
 
     let nextMesh = null;
+    let transportStep = null;
     if (!isExit) {
       nextMesh = roomMeshes.get(wallState.toRoomId);
       if (nextMesh.parent) {
         nextMesh.parent.remove(nextMesh);
       }
       nextMesh.position.set(0, 0, 0);
+      transportStep = getTraversalTransportMatrix(currentRoomId, probe.frontWall.wallKey);
     }
 
     traverseAnim = {
@@ -300,6 +307,7 @@ export function createGame(config) {
       toRoomId: wallState.toRoomId,
       currentMesh: activeRoomMesh,
       nextMesh,
+      transportStep,
       swapped: false,
     };
 
@@ -319,7 +327,7 @@ export function createGame(config) {
 
     if (t >= 1) {
       roomRig.quaternion.copy(rotationAnim.toQuat);
-      orientation = rotationAnim.targetMatrix;
+      viewOrientation = rotationAnim.targetMatrix;
       rotationAnim = null;
       mode = MODES.PLAYING;
     }
@@ -345,15 +353,28 @@ export function createGame(config) {
         .multiplyScalar(-traverseAnim.travelDistance * t);
     } else {
       if (!traverseAnim.swapped) {
-        roomRig.remove(traverseAnim.currentMesh);
+        transportRig.remove(traverseAnim.currentMesh);
         traverseAnim.currentMesh.position.set(0, 0, 0);
 
         activeRoomMesh = traverseAnim.nextMesh;
         currentRoomId = traverseAnim.toRoomId;
+
+        if (traverseAnim.transportStep) {
+          const inverseStep = invertOrthonormalMatrix(traverseAnim.transportStep);
+          const nextDir = applyMatrixToVector(inverseStep, [
+            traverseAnim.travelDir.x,
+            traverseAnim.travelDir.y,
+            traverseAnim.travelDir.z,
+          ]);
+          traverseAnim.travelDir.set(nextDir[0], nextDir[1], nextDir[2]).normalize();
+          transportOrientation = multiplyMatrices(transportOrientation, traverseAnim.transportStep);
+          syncTransportRigMatrix();
+        }
+
         traverseAnim.nextMesh.position
           .copy(traverseAnim.travelDir)
           .multiplyScalar(traverseAnim.travelDistance);
-        roomRig.add(traverseAnim.nextMesh);
+        transportRig.add(traverseAnim.nextMesh);
         traverseAnim.swapped = true;
         updateRoomFog(currentRoomId);
       }
@@ -418,7 +439,7 @@ export function createGame(config) {
 
   window.addEventListener('keydown', onKeyDown, { passive: false });
 
-  syncShuttleRotation();
+  syncTransportRigMatrix();
   updateRoomFog(currentRoomId);
   syncOverlay();
 
@@ -427,7 +448,6 @@ export function createGame(config) {
 
     updateRotation(dtMs);
     updateTraversal(dtMs);
-    syncShuttleRotation();
 
     syncOverlay();
   }
@@ -445,6 +465,7 @@ export function createGame(config) {
   function renderGameToText() {
     const probe = getAlignmentProbe();
     const wallState = probe?.wallState ?? null;
+    const effectiveOrientation = getEffectiveOrientation();
 
     const payload = {
       mode,
@@ -467,7 +488,7 @@ export function createGame(config) {
         projection: probe?.shuttleScreenOrientation ?? null,
       },
       alignment: probe?.aligned ?? false,
-      orientationSignature: matrixSignature(orientation),
+      orientationSignature: matrixSignature(effectiveOrientation),
       animation: rotationAnim
         ? {
             kind: 'ROTATE',

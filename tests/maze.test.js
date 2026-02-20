@@ -60,4 +60,16 @@ describe('maze generation', () => {
       }
     }
   });
+
+  it('keeps wall destinations consistent with tesseract topology', () => {
+    const maze = generateMaze({ seed: 4242 });
+
+    for (const [roomId, room] of Object.entries(maze.rooms)) {
+      for (const [wallKey, wall] of Object.entries(room.walls)) {
+        const neighbor = getNeighbor(roomId, wallKey);
+        expect(wall.toRoomId).toBe(neighbor.roomId);
+        expect(wall.toWallKey).toBe(neighbor.wallKey);
+      }
+    }
+  });
 });

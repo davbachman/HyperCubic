@@ -94,5 +94,117 @@ Original prompt: Build a first person maze game played on the (3D) cubical faces
 - Validation:
   - `npm test` passes.
   - `npm run build` passes.
+- Reduced traversal-time shuttle snap/jump artifact:
+  - In `/Users/davidbachman/Documents/HyperCube/src/game/Game.js`, moved `shuttleFrame` transport application from mid-traverse room-swap point to traversal completion (`rawT >= 1`) for non-exit transitions.
+  - This removes the abrupt orientation/handedness update while the room is still animating past the camera.
+- Validation:
+  - `npm test` passes.
+  - `npm run build` passes.
+- Reworked holonomy application so shuttle stays camera-fixed during room transitions:
+  - In `/Users/davidbachman/Documents/HyperCube/src/game/Game.js`, transport is now applied to a room-space frame (`transportFrame`) via a dedicated `transportRig` child group under `roomRig`.
+  - Shuttle rotation now follows view rotation only (`roomRig.quaternion`), not transport frame updates.
+  - Wall visibility/alignment computations now use transported wall bases (`transportFrame`) while shuttle arm axes remain fixed in local shuttle space.
+  - Transport frame updates happen at non-exit room swap, with `transportRig` matrix updated immediately, so holonomy changes the room/hole frame rather than flipping the shuttle.
+  - Kept `shuttleFrameSignature` in debug payload for backward compatibility; it now aliases `transportFrameSignature`.
+- Validation:
+  - `npm test` passes.
+  - `npm run build` passes.
+- Fixed mid-transition direction kink after room swap:
+  - Root cause: after applying transport at swap, second-half translation still used pre-swap local travel direction, causing world-space motion to bend (forward then left/down).
+  - In `/Users/davidbachman/Documents/HyperCube/src/game/Game.js`, traversal now preserves a constant roomRig/world-space direction (`travelDirRoom`) and, at swap, reprojects it into the new transported local frame via inverse (transpose) transport matrix.
+  - Second-half next-room translation uses this reprojected `nextTravelDir`, preserving straight-through motion across the full transition.
+- Validation:
+  - `npm test` passes.
+  - `npm run build` passes.
+- Enforced immediate reciprocal-hole continuity after traversals:
+  - Root cause: pure transport update could produce states where the reciprocal wall (the wall just crossed) was not guaranteed aligned even if entry was aligned.
+  - In `/Users/davidbachman/Documents/HyperCube/src/game/Game.js`, added a per-crossing correction matrix around the reciprocal wall basis at swap:
+    - computes current shuttle-vs-back-wall orientation,
+    - computes sign flips needed to match that wall’s fixed hole orientation,
+    - applies a local-frame correction that keeps wall normal unchanged while fixing alignment.
+  - Added helper math:
+    - `matrixFromBasisColumns(...)`,
+    - `getBackWallCorrectionMatrix(...)`.
+  - Traversal anim state now carries `toWallKey` so correction can target the exact reciprocal wall.
+  - Reprojection of second-half translation (`nextTravelDir`) still occurs after final corrected transport frame update, preserving straight motion.
+- Validation:
+  - `npm test` passes.
+  - `npm run build` passes.
+- Tightened front-wall targeting to shuttle-forward direction:
+  - Root cause for observed side-entry behavior: with off-center camera framing, front-wall selection could bias toward screen-center side walls instead of the wall directly in front of the shuttle.
+  - In `/Users/davidbachman/Documents/HyperCube/src/game/Game.js`, `getWallCandidates()` now prioritizes walls by camera-facing visibility + screen-center proximity.
+  - Reverted an intermediate shuttle-forward-dot selection attempt because it canceled view rotation and caused front-wall selection to become insensitive to turning, which broke alignment behavior.
+- Validation:
+  - `npm test` passes.
+  - `npm run build` passes.
   - Playwright screenshots/state captured for alignment pass in:
     - `/Users/davidbachman/Documents/HyperCube/output/web-game-align-fix-final-2/`
+- Implemented holonomy-correct shuttle transport across room transitions:
+  - Added `/Users/davidbachman/Documents/HyperCube/src/game/transport.js` with discrete signed-permutation traversal transport matrices derived from room/wall topology.
+  - Added stateful shuttle frame transport in `/Users/davidbachman/Documents/HyperCube/src/game/Game.js`:
+    - split orientation into `viewOrientation` (camera/room turns) and `shuttleFrame` (transported shuttle orientation),
+    - apply `shuttleFrame = T * shuttleFrame` on non-exit room swaps,
+    - render shuttle quaternion as `quat(viewOrientation) * quat(shuttleFrame)`,
+    - compute alignment against transformed shuttle arm axes.
+  - Extended `window.render_game_to_text()` with `shuttleFrameSignature` and transport debug signatures.
+- Added transport-focused tests in `/Users/davidbachman/Documents/HyperCube/tests/transport.test.js`:
+  - matrix validity (signed-permutation orthonormal + determinant ±1),
+  - reciprocal cancellation,
+  - explicit nontrivial loop holonomy,
+  - same-room alignment shift after closed-loop transport.
+- Validation:
+  - `npm test` passes (11 tests).
+  - `npm run build` passes.
+- Fixed post-holonomy visual misalignment where shuttle could appear off-rail after traversal:
+  - Root cause: shuttle frame transport includes determinant `-1` steps (reflection), but shuttle render path used quaternion composition only; quaternions cannot represent reflections.
+  - Updated `/Users/davidbachman/Documents/HyperCube/src/game/Game.js` shuttle transform path to use full 4x4 matrix composition each frame:
+    - `roomRotationMatrix * shuttleFrameMatrix`,
+    - `shuttle.matrixAutoUpdate = false`,
+    - direct matrix assignment in `syncShuttleRotation()`.
+  - Updated shuttle materials in `/Users/davidbachman/Documents/HyperCube/src/render/shuttle.js` to `DoubleSide` so mirrored transforms do not trigger face-culling artifacts.
+- Validation:
+  - `npm test` passes.
+  - `npm run build` passes.
+- Addressed combinatorics regression caused by in-progress uncommitted transport layer:
+  - Restored `/Users/davidbachman/Documents/HyperCube/src/game/Game.js` to the clean `HEAD` baseline from `Revert 4D rotation changes` (removed transport-frame/correction/hack path from active game loop).
+  - Removed experimental files from workspace: `/Users/davidbachman/Documents/HyperCube/src/game/transport.js` and `/Users/davidbachman/Documents/HyperCube/tests/transport.test.js`.
+- Applied deterministic front-wall selection refinement in `/Users/davidbachman/Documents/HyperCube/src/game/Game.js`:
+  - `getWallCandidates()` now ranks by wall normal dot camera-forward (largest facing-normal wins) instead of screen-center proximity.
+  - This prevents occasional side-wall selection from the off-center camera and keeps right-turn + forward behavior tied to intended wall combinatorics.
+- Validation:
+  - `npm test` passes (3 files, 7 tests).
+  - `npm run build` passes.
+  - Playwright deterministic checks captured in:
+    - `/Users/davidbachman/Documents/HyperCube/output/right-cycle-after-fix/`
+    - `/Users/davidbachman/Documents/HyperCube/output/path-check-after-fix/`
+- Added topology-combinatorics guard test in `/Users/davidbachman/Documents/HyperCube/tests/maze.test.js`:
+  - `keeps wall destinations consistent with tesseract topology` verifies every wall's `toRoomId/toWallKey` equals `getNeighbor(roomId, wallKey)`.
+- Final validation pass:
+  - `npm test` passes (8 tests).
+  - `npm run build` passes.
+  - Playwright smoke run with turn+traverse actions completed with no console errors:
+    - `/Users/davidbachman/Documents/HyperCube/output/combinatorics-final-check/`
+- Implemented traversal-frame transport for tesseract face combinatorics:
+  - Added `getTraversalTransportMatrix(roomId, wallKey)` in `/Users/davidbachman/Documents/HyperCube/src/game/topology.js`.
+  - Added `invertOrthonormalMatrix(...)` helper (transpose for signed orthonormal 3x3 matrices).
+  - Updated `/Users/davidbachman/Documents/HyperCube/src/game/Game.js` to split orientation into:
+    - `viewOrientation` (player turns, proper rotations),
+    - `transportOrientation` (accumulated per-crossing transport; can include reflections),
+    - effective orientation = `viewOrientation * transportOrientation` for front-wall selection/debug signature.
+  - Added `transportRig` under `roomRig` and apply transport matrix there, updating it at non-exit room swap.
+  - On swap, reproject traversal direction through inverse transport step so world-space travel remains continuous.
+- Added `/Users/davidbachman/Documents/HyperCube/tests/transport.test.js`:
+  - reciprocal crossing transport cancellation,
+  - exhaustive `F, L, F, L, F` closure to start room across all 8 rooms × 24 discrete view orientations.
+- Updated `/Users/davidbachman/Documents/HyperCube/AGENTS.md`:
+  - replaced old non-holonomy note with: room transitions now apply discrete transport matching tesseract face combinatorics.
+- Validation:
+  - `npm test` passes (4 files, 10 tests).
+  - `npm run build` passes.
+  - Ran skill Playwright client:
+    - command: `node "$WEB_GAME_CLIENT" --url http://127.0.0.1:4173 --actions-json ... --iterations 2 --screenshot-dir /Users/davidbachman/Documents/HyperCube/output/transport-step-smoke`
+    - artifacts: `/Users/davidbachman/Documents/HyperCube/output/transport-step-smoke/shot-0.png`, `shot-1.png`, `state-0.json`, `state-1.json`
+    - no console error artifacts produced.
+  - Ran deterministic Playwright probe from skill scripts environment:
+    - confirmed front-wall target changes after turn (`frontChanged: true`),
+    - confirmed aligned `Space` traversal lands in expected room (`actual === expected`).

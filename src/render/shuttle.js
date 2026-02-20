@@ -10,6 +10,7 @@ function makeArm(length, radius, axis) {
     emissiveIntensity: 0.95,
     metalness: 0.35,
     roughness: 0.15,
+    side: THREE.DoubleSide,
   });
 
   const arm = new THREE.Mesh(geometry, material);
@@ -36,6 +37,7 @@ function makeTip(position) {
       emissiveIntensity: 1.05,
       metalness: 0.25,
       roughness: 0.25,
+      side: THREE.DoubleSide,
     }),
   );
   tip.position.copy(position);
@@ -63,6 +65,7 @@ export function createShuttle() {
       emissiveIntensity: 1.35,
       metalness: 0.2,
       roughness: 0.2,
+      side: THREE.DoubleSide,
     }),
   );
   group.add(core);

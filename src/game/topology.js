@@ -18,6 +18,8 @@ const LOCAL_AXIS_TO_VECTOR = {
   Z: [0, 0, 1],
 };
 
+const LOCAL_AXES = ['X', 'Y', 'Z'];
+
 export const ROOM_IDS = ['W+', 'W-', 'X+', 'X-', 'Y+', 'Y-', 'Z+', 'Z-'];
 
 export const ROOM_COLORS = {
@@ -93,6 +95,35 @@ function antiSymmetricPairSign(a, b) {
   return AXES.indexOf(a) < AXES.indexOf(b) ? 1 : -1;
 }
 
+function transpose3(matrix) {
+  return [
+    matrix[0], matrix[3], matrix[6],
+    matrix[1], matrix[4], matrix[7],
+    matrix[2], matrix[5], matrix[8],
+  ];
+}
+
+function getRoomAxisMaps(roomId) {
+  const { fixedAxis, fixedSign } = parseRoomId(roomId);
+  const ambientToLocal = {};
+  const localToAmbient = new Array(3).fill(null);
+
+  for (const axis of AXES) {
+    if (axis === fixedAxis) {
+      continue;
+    }
+
+    const localAxis = PAIR_TO_LOCAL_AXIS[pairKey(fixedAxis, axis)];
+    const localIndex = LOCAL_AXES.indexOf(localAxis);
+    const sign = fixedSign * antiSymmetricPairSign(fixedAxis, axis);
+
+    ambientToLocal[axis] = { localIndex, sign };
+    localToAmbient[localIndex] = { axis, sign };
+  }
+
+  return { ambientToLocal, localToAmbient };
+}
+
 export function getWallVector(roomId, wallKey) {
   const { fixedAxis, fixedSign } = parseRoomId(roomId);
   const { axis, sign } = parseWallKey(wallKey);
@@ -125,6 +156,53 @@ export function getWallBasis(roomId, wallKey) {
     u,
     v,
   };
+}
+
+/**
+ * Matrix that maps destination-room local vectors into source-room local vectors.
+ * When crossing from `roomId` through `wallKey`, apply this on the right:
+ *   nextFrame = currentFrame * matrix
+ */
+export function getTraversalTransportMatrix(roomId, wallKey) {
+  const { fixedAxis, fixedSign } = parseRoomId(roomId);
+  const { axis: wallAxis, sign: wallSign } = parseWallKey(wallKey);
+
+  if (wallAxis === fixedAxis) {
+    throw new Error(`Wall ${wallKey} is not valid for room ${roomId}`);
+  }
+
+  const neighbor = getNeighbor(roomId, wallKey);
+  const sourceMaps = getRoomAxisMaps(roomId);
+  const destinationMaps = getRoomAxisMaps(neighbor.roomId);
+
+  const transportParity = fixedSign * wallSign;
+  const out = new Array(9).fill(0);
+
+  for (let destLocalIndex = 0; destLocalIndex < 3; destLocalIndex += 1) {
+    const sourceAmbient = destinationMaps.localToAmbient[destLocalIndex];
+
+    let transportedAxis = sourceAmbient.axis;
+    let transportedSign = sourceAmbient.sign;
+
+    // Inverse of the quarter-turn transport in the source fixed-axis / wall-axis plane.
+    if (transportedAxis === fixedAxis) {
+      transportedAxis = wallAxis;
+      transportedSign *= -transportParity;
+    } else if (transportedAxis === wallAxis) {
+      transportedAxis = fixedAxis;
+      transportedSign *= transportParity;
+    }
+
+    const mapped = sourceMaps.ambientToLocal[transportedAxis];
+    const localSign = transportedSign * mapped.sign;
+    out[mapped.localIndex * 3 + destLocalIndex] = localSign;
+  }
+
+  return out;
+}
+
+export function invertOrthonormalMatrix(matrix) {
+  return transpose3(matrix);
 }
 
 export function canonicalWallPair(aRoomId, aWallKey, bRoomId, bWallKey) {
