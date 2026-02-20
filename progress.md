@@ -86,3 +86,13 @@ Original prompt: Build a first person maze game played on the (3D) cubical faces
 - Validation:
   - `npm test` + `npm run build` pass.
   - 60-trial Playwright stress check (press Up first, then random rotations) achieved 60/60 successful align+traverse transitions.
+- Alignment and exit visual polish pass:
+  - Updated `/Users/davidbachman/Documents/HyperCube/src/game/Game.js` alignment probe to evaluate only the single front-most wall candidate (screen-center prioritized), instead of scanning visible neighbors and selecting any aligned wall.
+  - Replaced camera-projected alignment comparison with wall-local shuttle-vs-hole comparison (uses wall basis and shuttle arm axes), which removes perspective/camera-angle-driven false align/misalign swaps.
+  - Kept debug payload field names for compatibility (`holeOrientationScreen`, `shuttle.projection`) but now they contain wall-local orientation signs.
+  - Updated `/Users/davidbachman/Documents/HyperCube/src/render/room.js` to render EXIT holes with a filled neon interior in addition to the outline (`makeHoleFill` for `wallState.type === 'EXIT'`).
+- Validation:
+  - `npm test` passes.
+  - `npm run build` passes.
+  - Playwright screenshots/state captured for alignment pass in:
+    - `/Users/davidbachman/Documents/HyperCube/output/web-game-align-fix-final-2/`

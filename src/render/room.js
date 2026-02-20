@@ -120,6 +120,24 @@ function makeHoleOutline(orientation, color, zOffset = 0.03) {
   return group;
 }
 
+function makeHoleFill(orientation, color, zOffset = 0.022) {
+  const points = lPolygonPoints(orientation, ROOM_SIZE * 0.28, ROOM_SIZE * 0.14);
+  const shape = new THREE.Shape(points.map(([x, y]) => new THREE.Vector2(x, y)));
+  const fill = new THREE.Mesh(
+    new THREE.ShapeGeometry(shape),
+    new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0.42,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    }),
+  );
+  fill.position.z = zOffset;
+  return fill;
+}
+
 function wallHoleColorHex(wallState) {
   if (wallState.type === 'EXIT') {
     return SHUTTLE_COLOR_HEX;
@@ -162,6 +180,9 @@ export function createRoomMesh(roomId, wallStates) {
 
     if (wallState.type !== 'NONE' && wallState.orientation) {
       const holeColor = wallHoleColorHex(wallState);
+      if (wallState.type === 'EXIT') {
+        wallGroup.add(makeHoleFill(wallState.orientation, holeColor));
+      }
       wallGroup.add(makeHoleOutline(wallState.orientation, holeColor));
     }
 

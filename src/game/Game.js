@@ -86,8 +86,6 @@ export function createGame(config) {
   let rotationAnim = null;
   let traverseAnim = null;
   const cameraForward = new THREE.Vector3();
-  const cameraRight = new THREE.Vector3();
-  const cameraUp = new THREE.Vector3();
   const wallCenterVec = new THREE.Vector3();
   const wallViewVec = new THREE.Vector3();
   const projectedVec = new THREE.Vector3();
@@ -103,8 +101,6 @@ export function createGame(config) {
 
   function refreshCameraBasis() {
     camera.getWorldDirection(cameraForward).normalize();
-    cameraRight.set(1, 0, 0).applyQuaternion(camera.quaternion).normalize();
-    cameraUp.set(0, 1, 0).applyQuaternion(camera.quaternion).normalize();
   }
 
   function getWallCandidates() {
@@ -147,60 +143,36 @@ export function createGame(config) {
     return candidates;
   }
 
-  function getHoleScreenOrientation(roomId, wallKey, holeOrientation) {
-    if (!holeOrientation) {
-      return null;
-    }
+  function getShuttleWallOrientation(roomId, wallKey) {
+    const { normal, u, v } = getWallBasis(roomId, wallKey);
 
-    const { u, v } = getWallBasis(roomId, wallKey);
-    const hWorld = applyMatrixToVector(orientation, [
-      u[0] * holeOrientation.h,
-      u[1] * holeOrientation.h,
-      u[2] * holeOrientation.h,
-    ]);
-    const vWorld = applyMatrixToVector(orientation, [
-      v[0] * holeOrientation.v,
-      v[1] * holeOrientation.v,
-      v[2] * holeOrientation.v,
-    ]);
+    let h = 0;
+    let vertical = 0;
 
-    const hSign =
-      hWorld[0] * cameraRight.x + hWorld[1] * cameraRight.y + hWorld[2] * cameraRight.z >= 0
-        ? 1
-        : -1;
-    const vSign =
-      vWorld[0] * cameraUp.x + vWorld[1] * cameraUp.y + vWorld[2] * cameraUp.z >= 0 ? 1 : -1;
-
-    return { h: hSign, v: vSign };
-  }
-
-  function getShuttleScreenOrientation(frontNormalWorld) {
-    const candidates = [];
     for (const armAxisLocal of SHUTTLE_ARM_AXES) {
-      const armWorld = applyMatrixToVector(orientation, armAxisLocal);
-      if (Math.abs(dotArray(armWorld, frontNormalWorld)) > 0.6) {
+      if (Math.abs(dotArray(armAxisLocal, normal)) > 0.6) {
         continue;
       }
-      const rightScore =
-        armWorld[0] * cameraRight.x + armWorld[1] * cameraRight.y + armWorld[2] * cameraRight.z;
-      const upScore = armWorld[0] * cameraUp.x + armWorld[1] * cameraUp.y + armWorld[2] * cameraUp.z;
-      candidates.push({ rightScore, upScore });
+
+      const hScore = dotArray(armAxisLocal, u);
+      const vScore = dotArray(armAxisLocal, v);
+
+      if (Math.abs(hScore) > 0.6) {
+        h = hScore > 0 ? 1 : -1;
+      }
+      if (Math.abs(vScore) > 0.6) {
+        vertical = vScore > 0 ? 1 : -1;
+      }
     }
 
-    if (candidates.length !== 2) {
+    if (h === 0 || vertical === 0) {
       return null;
     }
 
-    let hIdx = Math.abs(candidates[0].rightScore) >= Math.abs(candidates[1].rightScore) ? 0 : 1;
-    let vIdx = Math.abs(candidates[0].upScore) >= Math.abs(candidates[1].upScore) ? 0 : 1;
-    if (hIdx === vIdx) {
-      vIdx = hIdx === 0 ? 1 : 0;
-    }
-
-    const h = candidates[hIdx].rightScore >= 0 ? 1 : -1;
-    const v = candidates[vIdx].upScore >= 0 ? 1 : -1;
-
-    return { h, v };
+    return {
+      h: /** @type {-1|1} */ (h),
+      v: /** @type {-1|1} */ (vertical),
+    };
   }
 
   function getAlignmentProbe() {
@@ -209,40 +181,26 @@ export function createGame(config) {
       return null;
     }
 
-    let fallbackProbe = null;
+    const frontWall = candidates[0];
+    const wallState = maze.rooms[currentRoomId].walls[frontWall.wallKey];
+    const shuttleWallOrientation = getShuttleWallOrientation(currentRoomId, frontWall.wallKey);
+    const holeWallOrientation =
+      wallState && wallState.type !== 'NONE' && wallState.orientation ? wallState.orientation : null;
 
-    for (const wall of candidates) {
-      const wallState = maze.rooms[currentRoomId].walls[wall.wallKey];
-      const shuttleScreenOrientation = getShuttleScreenOrientation(wall.normalWorld);
-      const holeScreenOrientation =
-        wallState && wallState.type !== 'NONE' && wallState.orientation
-          ? getHoleScreenOrientation(currentRoomId, wall.wallKey, wallState.orientation)
-          : null;
+    const aligned =
+      shuttleWallOrientation !== null &&
+      holeWallOrientation !== null &&
+      holeWallOrientation.h === shuttleWallOrientation.h &&
+      holeWallOrientation.v === shuttleWallOrientation.v;
 
-      const aligned =
-        shuttleScreenOrientation !== null &&
-        holeScreenOrientation !== null &&
-        holeScreenOrientation.h === shuttleScreenOrientation.h &&
-        holeScreenOrientation.v === shuttleScreenOrientation.v;
-
-      const probe = {
-        frontWall: wall,
-        wallState,
-        shuttleScreenOrientation,
-        holeScreenOrientation,
-        aligned,
-        canTraverse: aligned,
-      };
-
-      if (!fallbackProbe) {
-        fallbackProbe = probe;
-      }
-      if (aligned) {
-        return probe;
-      }
-    }
-
-    return fallbackProbe;
+    return {
+      frontWall,
+      wallState,
+      shuttleScreenOrientation: shuttleWallOrientation,
+      holeScreenOrientation: holeWallOrientation,
+      aligned,
+      canTraverse: aligned,
+    };
   }
 
   function syncOverlay() {
