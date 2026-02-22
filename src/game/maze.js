@@ -3,6 +3,7 @@ import {
   EXIT_ROOM_ID,
   getAllDirectedWalls,
   getNeighbor,
+  getTraversalTransportMatrix,
   getWallsForRoom,
   ROOM_IDS,
 } from './topology.js';
@@ -11,10 +12,11 @@ import {
   getReciprocalHoleOrientationForTraversal,
   getShuttleWallOrientation,
 } from './mazeEvaluator.js';
+import { IDENTITY_MATRIX, multiplyMatrices } from './orientation.js';
 
 /** @typedef {'NORMAL'|'EXIT'|'NONE'} HoleType */
 /** @typedef {{h: -1|1, v: -1|1}} HoleOrientation */
-/** @typedef {{ targetSteps?: number, fallbackSteps?: number, timeBudgetMs?: number, preferHolonomy?: boolean, optimizeStartAndExit?: boolean }} MazeGenerationConfig */
+/** @typedef {{ targetSteps?: number, fallbackSteps?: number, timeBudgetMs?: number, preferHolonomy?: boolean, optimizeStartAndExit?: boolean, forceConstructiveFallback?: boolean }} MazeGenerationConfig */
 /** @typedef {{ seed?: number, generation?: MazeGenerationConfig }} GenerateMazeOptions */
 
 const START_ROOM_IDS = ROOM_IDS.filter((roomId) => roomId !== EXIT_ROOM_ID);
@@ -31,6 +33,7 @@ const DEFAULT_GENERATION_CONFIG = Object.freeze({
   timeBudgetMs: 300,
   preferHolonomy: true,
   optimizeStartAndExit: true,
+  forceConstructiveFallback: false,
 });
 
 const UNDIRECTED_WALL_PAIRS = [];
@@ -108,6 +111,10 @@ function normalizeGenerationConfig(config) {
       typeof config?.optimizeStartAndExit === 'boolean'
         ? config.optimizeStartAndExit
         : DEFAULT_GENERATION_CONFIG.optimizeStartAndExit,
+    forceConstructiveFallback:
+      typeof config?.forceConstructiveFallback === 'boolean'
+        ? config.forceConstructiveFallback
+        : DEFAULT_GENERATION_CONFIG.forceConstructiveFallback,
   };
 }
 
@@ -339,6 +346,207 @@ function setWall(rooms, roomId, wallKey, value) {
   rooms[roomId].walls[wallKey] = value;
 }
 
+function roundSearchMs(searchStartedAt) {
+  return Math.round((performance.now() - searchStartedAt) * 1000) / 1000;
+}
+
+function buildMazeResult(seed, maze, metrics, generationInfo) {
+  return {
+    seed,
+    startRoomId: maze.startRoomId,
+    exit: {
+      roomId: EXIT_ROOM_ID,
+      wallKey: maze.exit.wallKey,
+    },
+    rooms: maze.rooms,
+    generationInfo: {
+      targetStepsRequested: generationInfo.targetStepsRequested,
+      targetStepsUsed: generationInfo.targetStepsUsed,
+      shortestSteps: metrics.shortestSteps,
+      holonomyPreferenceScore: metrics.holonomyPreferenceScore,
+      reachableStateCount: metrics.reachableStateCount,
+      goalPathMultiplicity: metrics.goalPathMultiplicity,
+      searchMs: generationInfo.searchMs,
+      clamped: generationInfo.clamped,
+      evaluations: generationInfo.evaluations,
+      candidatePoolSize: generationInfo.candidatePoolSize,
+      strategy: generationInfo.strategy,
+      searchExhausted: generationInfo.searchExhausted,
+    },
+  };
+}
+
+function chooseConstructiveTraverseSteps(startRoomId, exitWallKey, rng) {
+  /** @type {{ roomId: string, wallKey: string }[]} */
+  const steps = [];
+  let currentRoomId = startRoomId;
+
+  if (currentRoomId === EXIT_ROOM_ID) {
+    throw new Error('Constructive fallback cannot start inside the exit room');
+  }
+
+  if (currentRoomId === 'W-' || currentRoomId === exitWallKey) {
+    const intermediateOptions = getWallsForRoom(currentRoomId)
+      .map((wallKey) => ({
+        wallKey,
+        toRoomId: getNeighbor(currentRoomId, wallKey).roomId,
+      }))
+      .filter(
+        ({ toRoomId }) =>
+          toRoomId !== EXIT_ROOM_ID && toRoomId !== 'W-' && toRoomId !== exitWallKey,
+      );
+
+    if (intermediateOptions.length === 0) {
+      throw new Error(
+        `Constructive fallback could not choose an intermediate room from ${currentRoomId}`,
+      );
+    }
+
+    const chosen = randomChoice(intermediateOptions, rng);
+    steps.push({
+      roomId: currentRoomId,
+      wallKey: chosen.wallKey,
+    });
+    currentRoomId = chosen.toRoomId;
+  }
+
+  if (currentRoomId === 'W-' || currentRoomId === EXIT_ROOM_ID || currentRoomId === exitWallKey) {
+    throw new Error(
+      `Constructive fallback could not stage a valid pre-exit room (got ${currentRoomId}, exit ${exitWallKey})`,
+    );
+  }
+
+  steps.push({
+    roomId: currentRoomId,
+    wallKey: 'W+',
+  });
+
+  return steps;
+}
+
+function applyConstructiveGuaranteedPath(maze, rng) {
+  const steps = chooseConstructiveTraverseSteps(maze.startRoomId, maze.exit.wallKey, rng);
+  let currentRoomId = maze.startRoomId;
+  let transportOrientation = [...IDENTITY_MATRIX];
+
+  for (const step of steps) {
+    if (step.roomId !== currentRoomId) {
+      throw new Error(
+        `Constructive fallback step room mismatch (expected ${currentRoomId}, got ${step.roomId})`,
+      );
+    }
+
+    const wallState = maze.rooms[currentRoomId].walls[step.wallKey];
+    if (!wallState || wallState.type !== 'NORMAL') {
+      throw new Error(
+        `Constructive fallback expected NORMAL wall at ${currentRoomId}:${step.wallKey}`,
+      );
+    }
+
+    const alignedOrientation = getShuttleWallOrientation(
+      currentRoomId,
+      step.wallKey,
+      transportOrientation,
+    );
+    if (!alignedOrientation) {
+      throw new Error(
+        `Constructive fallback could not compute shuttle orientation for ${currentRoomId}:${step.wallKey}`,
+      );
+    }
+
+    wallState.orientation = alignedOrientation;
+    const reciprocalOrientation = getReciprocalHoleOrientationForTraversal(
+      currentRoomId,
+      step.wallKey,
+      alignedOrientation,
+    );
+    const reciprocalWall = maze.rooms[wallState.toRoomId].walls[wallState.toWallKey];
+    if (!reciprocalWall || reciprocalWall.type !== 'NORMAL') {
+      throw new Error(
+        `Constructive fallback expected reciprocal NORMAL wall at ${wallState.toRoomId}:${wallState.toWallKey}`,
+      );
+    }
+    reciprocalWall.orientation = reciprocalOrientation;
+
+    transportOrientation = multiplyMatrices(
+      transportOrientation,
+      getTraversalTransportMatrix(currentRoomId, step.wallKey),
+    );
+    currentRoomId = wallState.toRoomId;
+  }
+
+  if (currentRoomId !== EXIT_ROOM_ID) {
+    throw new Error(`Constructive fallback path failed to reach ${EXIT_ROOM_ID}`);
+  }
+
+  const exitWallState = maze.rooms[EXIT_ROOM_ID].walls[maze.exit.wallKey];
+  if (!exitWallState || exitWallState.type !== 'EXIT') {
+    throw new Error(
+      `Constructive fallback expected EXIT wall at ${EXIT_ROOM_ID}:${maze.exit.wallKey}`,
+    );
+  }
+
+  const exitOrientation = getShuttleWallOrientation(
+    EXIT_ROOM_ID,
+    maze.exit.wallKey,
+    transportOrientation,
+  );
+  if (!exitOrientation) {
+    throw new Error(
+      `Constructive fallback could not compute exit orientation for ${EXIT_ROOM_ID}:${maze.exit.wallKey}`,
+    );
+  }
+  exitWallState.orientation = exitOrientation;
+
+  const exitReciprocal = maze.rooms[exitWallState.toRoomId].walls[exitWallState.toWallKey];
+  if (!exitReciprocal || exitReciprocal.type !== 'NONE') {
+    throw new Error(
+      `Constructive fallback expected NONE reciprocal for ${EXIT_ROOM_ID}:${maze.exit.wallKey}`,
+    );
+  }
+}
+
+function buildConstructiveFallbackResult({
+  seed,
+  rng,
+  generationConfig,
+  lockedStartRoomId,
+  lockedExitWallKey,
+  evaluations,
+  candidatePoolSize,
+  searchStartedAt,
+  searchExhausted,
+}) {
+  const candidate = createCandidate(rng, lockedStartRoomId, lockedExitWallKey);
+  const maze = {
+    seed,
+    startRoomId: candidate.startRoomId,
+    exit: {
+      roomId: EXIT_ROOM_ID,
+      wallKey: candidate.exitWallKey,
+    },
+    rooms: createRoomsFromCandidate(candidate),
+  };
+
+  applyConstructiveGuaranteedPath(maze, rng);
+
+  const metrics = evaluateMaze(maze);
+  if (!metrics.solvable) {
+    throw new Error('Constructive fallback produced an unsolvable maze');
+  }
+
+  return buildMazeResult(seed, maze, metrics, {
+    targetStepsRequested: generationConfig.targetSteps,
+    targetStepsUsed: metrics.shortestSteps,
+    clamped: true,
+    evaluations,
+    candidatePoolSize,
+    searchMs: roundSearchMs(searchStartedAt),
+    strategy: 'constructive-fallback',
+    searchExhausted,
+  });
+}
+
 /**
  * @param {GenerateMazeOptions} [options]
  */
@@ -353,6 +561,20 @@ export function generateMaze(options = {}) {
 
   const lockedStartRoomId = generationConfig.optimizeStartAndExit ? null : randomChoice(START_ROOM_IDS, rng);
   const lockedExitWallKey = generationConfig.optimizeStartAndExit ? null : randomChoice(EXIT_WALL_KEYS, rng);
+
+  if (generationConfig.forceConstructiveFallback) {
+    return buildConstructiveFallbackResult({
+      seed,
+      rng,
+      generationConfig,
+      lockedStartRoomId,
+      lockedExitWallKey,
+      evaluations: 0,
+      candidatePoolSize: 0,
+      searchStartedAt,
+      searchExhausted: false,
+    });
+  }
 
   const maxEvaluations = Math.max(48, Math.floor(generationConfig.timeBudgetMs * 0.8));
   const initialPopulation = Math.min(maxEvaluations, 24);
@@ -434,7 +656,17 @@ export function generateMaze(options = {}) {
   }
 
   if (solved.length === 0) {
-    throw new Error('Failed to generate a solvable maze within fallback attempts');
+    return buildConstructiveFallbackResult({
+      seed,
+      rng,
+      generationConfig,
+      lockedStartRoomId,
+      lockedExitWallKey,
+      evaluations,
+      candidatePoolSize: bySignature.size,
+      searchStartedAt,
+      searchExhausted: true,
+    });
   }
 
   const solvedByTarget = solved.filter((record) => record.metrics.shortestSteps >= generationConfig.targetSteps);
@@ -467,28 +699,15 @@ export function generateMaze(options = {}) {
     };
   }
 
-  const searchMs = performance.now() - searchStartedAt;
   const chosen = selection.record;
-
-  return {
-    seed,
-    startRoomId: chosen.maze.startRoomId,
-    exit: {
-      roomId: EXIT_ROOM_ID,
-      wallKey: chosen.maze.exit.wallKey,
-    },
-    rooms: chosen.maze.rooms,
-    generationInfo: {
-      targetStepsRequested: generationConfig.targetSteps,
-      targetStepsUsed: selection.targetStepsUsed,
-      shortestSteps: chosen.metrics.shortestSteps,
-      holonomyPreferenceScore: chosen.metrics.holonomyPreferenceScore,
-      reachableStateCount: chosen.metrics.reachableStateCount,
-      goalPathMultiplicity: chosen.metrics.goalPathMultiplicity,
-      searchMs: Math.round(searchMs * 1000) / 1000,
-      clamped: selection.clamped,
-      evaluations,
-      candidatePoolSize: bySignature.size,
-    },
-  };
+  return buildMazeResult(seed, chosen.maze, chosen.metrics, {
+    targetStepsRequested: generationConfig.targetSteps,
+    targetStepsUsed: selection.targetStepsUsed,
+    clamped: selection.clamped,
+    evaluations,
+    candidatePoolSize: bySignature.size,
+    searchMs: roundSearchMs(searchStartedAt),
+    strategy: 'search',
+    searchExhausted: false,
+  });
 }

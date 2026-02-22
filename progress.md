@@ -277,3 +277,14 @@ Original prompt: Build a first person maze game played on the (3D) cubical faces
 - Fixed holonomy regression: replaced legacy reciprocal hole h-flip rule with transport-consistent reciprocal mapping derived in mazeEvaluator and used by maze generation.
 - Updated tests/docs/debug output for transport-consistent reciprocity; added ?seed= URL param in main.js for deterministic browser checks.
 - Validation: npm test (20 tests) passed, npm run build passed, Chromium+WebKit Playwright parity probe matched on seeded traverse + reciprocal-face alignment scenario.
+- Startup solvability hardening:
+  - `src/game/maze.js` now supports deterministic constructive fallback generation (`generation.forceConstructiveFallback`) and no longer throws when solver search exhausts unsolved candidates; it falls back to a guaranteed-solvable topology-consistent construction.
+  - Added `generationInfo.strategy` (`search` | `constructive-fallback`) and `generationInfo.searchExhausted` diagnostics.
+  - Constructive fallback carves a guaranteed route to `W+` and sets the exit orientation from the transported shuttle frame, then self-validates with `evaluateMaze(...)`.
+- Test updates:
+  - Added forced constructive fallback solvability/invariant coverage and determinism checks in `tests/maze.test.js`.
+  - Added startup seed-sample smoke test.
+  - Reduced long default seed-sweep sample count and increased timeout so `npm test` is reliable locally.
+- Validation:
+  - `npm test` passed (23 tests) in ~3.6s.
+  - `npm run build` passed.
