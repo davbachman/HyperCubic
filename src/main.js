@@ -1,5 +1,6 @@
 import './styles.css';
 
+import { createSoundscape } from './audio/soundscape.js';
 import { createGame } from './game/Game.js';
 import { createSceneSystem } from './render/scene.js';
 import { createOverlay } from './ui/overlay.js';
@@ -10,11 +11,13 @@ const appRoot = /** @type {HTMLDivElement} */ (document.getElementById('app'));
 
 const sceneSystem = createSceneSystem(canvas);
 const overlay = createOverlay(overlayRoot);
+const sound = createSoundscape();
 
 const game = createGame({
   scene: sceneSystem.scene,
   camera: sceneSystem.camera,
   overlay,
+  sound,
   rotationMs: 220,
   traverseMs: 1300,
 });

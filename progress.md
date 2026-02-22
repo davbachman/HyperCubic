@@ -252,3 +252,24 @@ Original prompt: Build a first person maze game played on the (3D) cubical faces
     - front wall retargets after turn (`frontChanged: true`),
     - aligned normal traversals land in expected destination room,
     - aligned EXIT + Space reaches `WIN`.
+- Added Tron-style procedural WebAudio soundscape.
+  - New module: `/Users/davidbachman/Documents/HyperCube/src/audio/soundscape.js`.
+  - No external assets; all sounds are synthesized in-browser.
+  - Implemented cues:
+    - low pulsing ambient drone while idle (`PLAYING` + no active animation),
+    - turn sound,
+    - misaligned-space feedback sound,
+    - traversal start whoosh + swap pulse at room switch,
+    - win arpeggio sound.
+- Wired sound system into app/game flow:
+  - `/Users/davidbachman/Documents/HyperCube/src/main.js`: create and pass `sound` to game.
+  - `/Users/davidbachman/Documents/HyperCube/src/game/Game.js`: added hooks at turn/traverse/misaligned/win points and idle pulse state updates.
+  - Audio context is primed on first user keydown to satisfy browser gesture policy.
+- Validation:
+  - `npm test` passed (17 tests).
+  - `npm run build` passed.
+  - Playwright smoke run completed without console-error artifacts in `/Users/davidbachman/Documents/HyperCube/output/audio-smoke/`.
+- Audio loudness adjustment:
+  - Increased master output gain and boosted per-cue envelope peaks in `/Users/davidbachman/Documents/HyperCube/src/audio/soundscape.js`.
+  - Raised ambient drone and pulse modulation levels so idle pulse is clearly audible.
+  - Build verification: `npm run build` passed.

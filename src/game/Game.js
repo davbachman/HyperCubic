@@ -50,6 +50,7 @@ function toHexString(hex) {
  *  scene: THREE.Scene,
  *  camera: THREE.PerspectiveCamera,
  *  overlay: { setMode: (mode: string) => void, setRoom: (payload: {roomId: string, colorName: string, colorHex: number}) => void, setStatus: (text: string, isPositive?: boolean) => void },
+ *  sound?: { prime?: () => void, setIdlePulseActive?: (active: boolean) => void, onTurn?: () => void, onMisalignedSpace?: () => void, onTraverseStart?: () => void, onTraverseSwap?: () => void, onWin?: () => void },
  *  seed?: number,
  *  rotationMs?: number,
  *  traverseMs?: number,
@@ -60,6 +61,7 @@ export function createGame(config) {
     scene,
     camera,
     overlay,
+    sound,
     seed,
     rotationMs = 220,
     traverseMs = 1300,
@@ -252,6 +254,7 @@ export function createGame(config) {
       return;
     }
 
+    sound?.onTurn?.();
     const targetMatrix = rotateWorld(viewOrientation, axis, direction);
 
     rotationAnim = {
@@ -271,11 +274,15 @@ export function createGame(config) {
 
     const probe = getAlignmentProbe();
     if (!probe || !probe.canTraverse) {
+      sound?.onMisalignedSpace?.();
       return;
     }
 
     const wallState = probe.wallState;
     const isExit = wallState.type === 'EXIT';
+    if (!isExit) {
+      sound?.onTraverseStart?.();
+    }
 
     // Room meshes are transformed in roomRig local space, so traversal direction
     // must also be local to avoid double-rotation artifacts.
@@ -375,6 +382,7 @@ export function createGame(config) {
           .copy(traverseAnim.travelDir)
           .multiplyScalar(traverseAnim.travelDistance);
         transportRig.add(traverseAnim.nextMesh);
+        sound?.onTraverseSwap?.();
         traverseAnim.swapped = true;
         updateRoomFog(currentRoomId);
       }
@@ -388,6 +396,7 @@ export function createGame(config) {
     if (rawT >= 1) {
       if (traverseAnim.isExit) {
         mode = MODES.WIN;
+        sound?.onWin?.();
       } else {
         traverseAnim.nextMesh.position.set(0, 0, 0);
         mode = MODES.PLAYING;
@@ -412,6 +421,8 @@ export function createGame(config) {
     if (event.repeat) {
       return;
     }
+
+    sound?.prime?.();
 
     if (mode === MODES.START) {
       if (key === 'Enter' || key === ' ' || key === 'Spacebar') {
@@ -448,6 +459,7 @@ export function createGame(config) {
 
     updateRotation(dtMs);
     updateTraversal(dtMs);
+    sound?.setIdlePulseActive?.(mode === MODES.PLAYING);
 
     syncOverlay();
   }
