@@ -306,3 +306,6 @@ Original prompt: Build a first person maze game played on the (3D) cubical faces
 - Validation:
   - `npm run build` passes.
   - Portrait Playwright screenshot checks captured in `/Users/davidbachman/Documents/HyperCube/output/portrait-framing-check-4/` and visually inspected.
+- Portrait framing refinement (follow-up):
+  - Kept portrait camera inside the room (closer to base position) and increased portrait-only FOV further to simulate a wider lens instead of backing the camera outside.
+  - Verified via portrait screenshot in `/Users/davidbachman/Documents/HyperCube/output/portrait-framing-check-5/`.

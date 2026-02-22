@@ -6,8 +6,8 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 export function createSceneSystem(canvas) {
   const baseCameraPosition = new THREE.Vector3(0.88, 0.54, -2.72);
   const cameraTarget = new THREE.Vector3(0, 0, 0);
-  const portraitCameraPosition = new THREE.Vector3(0.66, 0.42, -4.9);
-  const portraitCameraTarget = new THREE.Vector3(0, -0.04, 0);
+  const portraitCameraPosition = new THREE.Vector3(0.8, 0.48, -2.88);
+  const portraitCameraTarget = new THREE.Vector3(0, -0.06, 0);
   const baseCameraFov = 56;
   const cameraPosition = new THREE.Vector3();
   const lookTarget = new THREE.Vector3();
@@ -58,7 +58,7 @@ export function createSceneSystem(canvas) {
     cameraPosition.lerpVectors(baseCameraPosition, portraitCameraPosition, portraitT);
     lookTarget.lerpVectors(cameraTarget, portraitCameraTarget, portraitT);
     camera.position.copy(cameraPosition);
-    camera.fov = baseCameraFov + portraitT * 24;
+    camera.fov = baseCameraFov + portraitT * 30;
     camera.lookAt(lookTarget);
 
     camera.updateProjectionMatrix();
