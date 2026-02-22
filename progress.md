@@ -300,3 +300,9 @@ Original prompt: Build a first person maze game played on the (3D) cubical faces
   - Playwright regression run captured `/Users/davidbachman/Documents/HyperCube/output/mobile-input-regression/*`.
   - Touch probe verified swipe-to-rotate parity with arrow keys and tap-to-traverse (`/Users/davidbachman/Documents/HyperCube/output/mobile-touch-probe/result.json`, `touch-check.png`).
 - Note: Headless Playwright mobile-emulation context failed WebGL init in this environment; touch verification used desktop viewport with touch pointer events enabled and SwiftShader launch args.
+- Portrait camera framing fix:
+  - `/Users/davidbachman/Documents/HyperCube/src/render/scene.js` now interpolates camera position, look target, and FOV based on aspect ratio.
+  - Landscape framing remains the baseline; portrait gets a farther/wider camera to reduce the zoomed-in feel.
+- Validation:
+  - `npm run build` passes.
+  - Portrait Playwright screenshot checks captured in `/Users/davidbachman/Documents/HyperCube/output/portrait-framing-check-4/` and visually inspected.

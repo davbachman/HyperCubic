@@ -4,6 +4,14 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 
 export function createSceneSystem(canvas) {
+  const baseCameraPosition = new THREE.Vector3(0.88, 0.54, -2.72);
+  const cameraTarget = new THREE.Vector3(0, 0, 0);
+  const portraitCameraPosition = new THREE.Vector3(0.66, 0.42, -4.9);
+  const portraitCameraTarget = new THREE.Vector3(0, -0.04, 0);
+  const baseCameraFov = 56;
+  const cameraPosition = new THREE.Vector3();
+  const lookTarget = new THREE.Vector3();
+
   const renderer = new THREE.WebGLRenderer({
     canvas,
     antialias: true,
@@ -18,9 +26,9 @@ export function createSceneSystem(canvas) {
   scene.background = new THREE.Color(0x000000);
   scene.fog = new THREE.FogExp2(0x111217, 0.085);
 
-  const camera = new THREE.PerspectiveCamera(56, 1, 0.1, 120);
-  camera.position.set(0.88, 0.54, -2.72);
-  camera.lookAt(0, 0, 0);
+  const camera = new THREE.PerspectiveCamera(baseCameraFov, 1, 0.1, 120);
+  camera.position.copy(baseCameraPosition);
+  camera.lookAt(cameraTarget);
 
   const ambient = new THREE.AmbientLight(0x6f7fa8, 0.4);
   scene.add(ambient);
@@ -45,6 +53,14 @@ export function createSceneSystem(canvas) {
     renderer.setSize(width, height, false);
     composer.setSize(width, height);
     camera.aspect = width / Math.max(1, height);
+
+    const portraitT = THREE.MathUtils.clamp((1 - camera.aspect) / 0.45, 0, 1);
+    cameraPosition.lerpVectors(baseCameraPosition, portraitCameraPosition, portraitT);
+    lookTarget.lerpVectors(cameraTarget, portraitCameraTarget, portraitT);
+    camera.position.copy(cameraPosition);
+    camera.fov = baseCameraFov + portraitT * 24;
+    camera.lookAt(lookTarget);
+
     camera.updateProjectionMatrix();
   }
 
