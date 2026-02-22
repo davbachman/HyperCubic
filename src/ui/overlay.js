@@ -10,24 +10,32 @@ export function createOverlay(root) {
         <li><strong>F</strong>: toggle fullscreen</li>
         <li><strong>Enter or Space</strong>: start</li>
       </ul>
+      <p id="credits">By David Bachman and GPT 5.3 codex</p>
     </section>
     <section id="win-panel" class="overlay-panel">
       <h1 id="title">Exit Reached</h1>
       <p id="subtitle">The shuttle passed through the one-way white gate in the red room.</p>
     </section>
+    <button id="restart-button" type="button">Restart Game</button>
     <div id="room-chip" class="overlay-panel"></div>
     <div id="status-chip" class="overlay-panel"></div>
   `;
 
   const startPanel = root.querySelector('#start-panel');
   const winPanel = root.querySelector('#win-panel');
+  const restartButton = /** @type {HTMLButtonElement} */ (root.querySelector('#restart-button'));
   const roomChip = root.querySelector('#room-chip');
   const statusChip = root.querySelector('#status-chip');
+
+  restartButton.addEventListener('click', () => {
+    window.location.reload();
+  });
 
   function setMode(mode) {
     const playing = mode !== 'START';
     startPanel.style.display = mode === 'START' ? 'block' : 'none';
     winPanel.style.display = mode === 'WIN' ? 'block' : 'none';
+    restartButton.style.display = playing ? 'block' : 'none';
     roomChip.style.display = playing ? 'block' : 'none';
     statusChip.style.display = playing ? 'block' : 'none';
   }

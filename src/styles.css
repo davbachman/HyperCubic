@@ -94,6 +94,41 @@ body {
   color: #dbe9ff;
 }
 
+#credits {
+  margin: 14px 0 0;
+  color: var(--soft);
+  font-size: 0.95rem;
+}
+
+#restart-button {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  font-family: 'Orbitron', sans-serif;
+  letter-spacing: 0.06em;
+  font-size: 0.72rem;
+  cursor: pointer;
+  pointer-events: auto;
+  display: none;
+  box-shadow:
+    0 0 20px rgba(102, 167, 255, 0.2),
+    inset 0 0 12px rgba(80, 120, 200, 0.12);
+}
+
+#restart-button:hover {
+  border-color: rgba(180, 220, 255, 0.85);
+}
+
+#restart-button:focus-visible {
+  outline: 2px solid rgba(180, 220, 255, 0.9);
+  outline-offset: 2px;
+}
+
 #room-chip {
   position: absolute;
   top: 14px;
@@ -127,5 +162,12 @@ body {
 
   #controls {
     grid-template-columns: 1fr;
+  }
+
+  #restart-button {
+    left: 12px;
+    bottom: 12px;
+    font-size: 0.68rem;
+    padding: 9px 12px;
   }
 }
