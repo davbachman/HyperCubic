@@ -51,8 +51,8 @@ The player controls camera-relative room rotations and traverses L-shaped wall h
   - `Y-` pink
   - `Z+` purple
   - `Z-` violet
-- Non-exit wall pairs use reciprocal normal holes with horizontal-mirrored orientation:
-  - reciprocal `h = -h`, `v = v`.
+- Non-exit wall pairs use reciprocal normal holes with transport-consistent orientation:
+  - reciprocal orientation is derived from traversal transport + wall basis conventions (not a fixed `h`-flip rule).
 - Exit is one-way:
   - one `EXIT` wall on `W+`
   - reciprocal side is `NONE` (solid wall from neighbor side).
@@ -88,7 +88,7 @@ The player controls camera-relative room rotations and traverses L-shaped wall h
 - Topology reciprocity:
   - crossing a wall and crossing its reciprocal returns to origin room/wall.
 - Maze reciprocity:
-  - normal holes are mirrored exactly (`h` flipped only).
+  - normal-hole reciprocal orientations must match the transport-consistent mapping for the directed wall pair.
 - Exit invariant:
   - exactly one `EXIT` in red room and exactly one reciprocal `NONE`.
 - Topology destination invariant:
@@ -99,6 +99,7 @@ The player controls camera-relative room rotations and traverses L-shaped wall h
 - Difficulty target defaults to `22+` shortest keypresses with in-budget fallback clamping (`22` -> `16` -> best feasible).
 - Holonomy-rich solutions are preferred but not strictly required for acceptance.
 - Room transitions apply a discrete transport step so left-turn movement combinatorics match tesseract face transport.
+- Reciprocal hole orientations are transport-consistent so aligned traversals remain geometrically reversible across room boundaries.
 - Opposite-color pairs like `X+` (yellow) and `X-` (blue) are opposite tesseract cells, not direct neighbors.
 
 ## Common Pitfalls

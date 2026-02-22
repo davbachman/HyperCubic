@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { evaluateMaze, getFrontWallForState, getShuttleWallOrientation, applyTraverseTransport } from '../src/game/mazeEvaluator.js';
-import { IDENTITY_MATRIX, matrixSignature } from '../src/game/orientation.js';
+import {
+  applyTraverseTransport,
+  evaluateMaze,
+  getFrontWallForState,
+  getReciprocalHoleOrientationForTraversal,
+  getShuttleWallOrientation,
+} from '../src/game/mazeEvaluator.js';
+import { IDENTITY_MATRIX, matrixSignature, multiplyMatrices } from '../src/game/orientation.js';
 import {
   canonicalWallPair,
   EXIT_ROOM_ID,
@@ -108,6 +114,33 @@ function buildUniformMaze({ startRoomId, exitWallKey, normalOrientation, exitOri
   };
 }
 
+function enumerateReachableTransportMatrices() {
+  const seen = new Map();
+  const queue = [[...IDENTITY_MATRIX]];
+
+  while (queue.length > 0) {
+    const matrix = queue.shift();
+    const signature = matrixSignature(matrix);
+    if (seen.has(signature)) {
+      continue;
+    }
+    seen.set(signature, matrix);
+
+    for (const { roomId, wallKey } of getAllDirectedWalls()) {
+      queue.push(multiplyMatrices(matrix, getTraversalTransportMatrix(roomId, wallKey)));
+    }
+  }
+
+  return [...seen.values()];
+}
+
+const HOLE_ORIENTATION_OPTIONS = [
+  { h: -1, v: -1 },
+  { h: -1, v: 1 },
+  { h: 1, v: -1 },
+  { h: 1, v: 1 },
+];
+
 describe('maze evaluator', () => {
   it('selects the same front wall as runtime camera-facing rule', () => {
     const frontWall = getFrontWallForState('W+', IDENTITY_MATRIX, IDENTITY_MATRIX);
@@ -167,6 +200,45 @@ describe('maze evaluator', () => {
     });
 
     expect(changedWall).toBeDefined();
+  });
+
+  it('derives transport-consistent reciprocal hole mappings for all directed walls and orientations', () => {
+    const transportMatrices = enumerateReachableTransportMatrices();
+
+    for (const { roomId, wallKey } of getAllDirectedWalls()) {
+      const neighbor = getNeighbor(roomId, wallKey);
+      const transportStep = getTraversalTransportMatrix(roomId, wallKey);
+
+      for (const sourceOrientation of HOLE_ORIENTATION_OPTIONS) {
+        const mapped = getReciprocalHoleOrientationForTraversal(roomId, wallKey, sourceOrientation);
+        let matchedSourceStateCount = 0;
+
+        for (const transportMatrix of transportMatrices) {
+          const shuttleSource = getShuttleWallOrientation(roomId, wallKey, transportMatrix);
+          if (
+            shuttleSource === null ||
+            shuttleSource.h !== sourceOrientation.h ||
+            shuttleSource.v !== sourceOrientation.v
+          ) {
+            continue;
+          }
+          matchedSourceStateCount += 1;
+
+          const nextTransport = multiplyMatrices(transportMatrix, transportStep);
+          const reciprocalShuttle = getShuttleWallOrientation(neighbor.roomId, neighbor.wallKey, nextTransport);
+          expect(reciprocalShuttle).toEqual(mapped);
+        }
+
+        expect(matchedSourceStateCount).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('uses the holonomy-consistent reciprocal mapping for W+:Z+ from {1,1}', () => {
+    expect(getReciprocalHoleOrientationForTraversal('W+', 'Z+', { h: 1, v: 1 })).toEqual({
+      h: 1,
+      v: -1,
+    });
   });
 
   it('requires aligned EXIT orientation before the final Space can win', () => {

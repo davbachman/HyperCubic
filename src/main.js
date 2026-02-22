@@ -12,12 +12,17 @@ const appRoot = /** @type {HTMLDivElement} */ (document.getElementById('app'));
 const sceneSystem = createSceneSystem(canvas);
 const overlay = createOverlay(overlayRoot);
 const sound = createSoundscape();
+const urlParams = new URLSearchParams(window.location.search);
+const seedParam = urlParams.get('seed');
+const parsedSeed = seedParam === null ? null : Number(seedParam);
+const seed = Number.isFinite(parsedSeed) ? (Math.floor(parsedSeed) >>> 0) : undefined;
 
 const game = createGame({
   scene: sceneSystem.scene,
   camera: sceneSystem.camera,
   overlay,
   sound,
+  seed,
   rotationMs: 220,
   traverseMs: 1300,
 });

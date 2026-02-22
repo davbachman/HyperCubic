@@ -501,6 +501,7 @@ export function createGame(config) {
             wallKey: probe.frontWall.wallKey,
             type: wallState?.type ?? null,
             toRoomId: wallState?.toRoomId ?? null,
+            toWallKey: wallState?.toWallKey ?? null,
             holeOrientationRaw: wallState?.orientation ?? null,
             holeOrientationScreen: probe.holeScreenOrientation,
           }
@@ -509,6 +510,8 @@ export function createGame(config) {
         projection: probe?.shuttleScreenOrientation ?? null,
       },
       alignment: probe?.aligned ?? false,
+      viewOrientationSignature: matrixSignature(viewOrientation),
+      transportOrientationSignature: matrixSignature(transportOrientation),
       orientationSignature: matrixSignature(effectiveOrientation),
       animation: rotationAnim
         ? {

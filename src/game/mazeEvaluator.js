@@ -1,4 +1,5 @@
 import {
+  getNeighbor,
   getTraversalTransportMatrix,
   getWallBasis,
   getWallVector,
@@ -20,6 +21,12 @@ const SHUTTLE_ARM_AXES = [
   [0, 1, 0],
   [0, 0, 1],
 ];
+const HOLE_ORIENTATION_OPTIONS = Object.freeze([
+  Object.freeze({ h: -1, v: -1 }),
+  Object.freeze({ h: -1, v: 1 }),
+  Object.freeze({ h: 1, v: -1 }),
+  Object.freeze({ h: 1, v: 1 }),
+]);
 
 const ROOM_WALL_KEYS = Object.fromEntries(ROOM_IDS.map((roomId) => [roomId, getWallsForRoom(roomId)]));
 
@@ -69,6 +76,18 @@ function normalize(vector) {
 
 function dotArray(a, b) {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+function sameHoleOrientation(a, b) {
+  return !!a && !!b && a.h === b.h && a.v === b.v;
+}
+
+function holeOrientationKey(orientation) {
+  return `${orientation.h},${orientation.v}`;
+}
+
+function directedHoleReciprocalKey(roomId, wallKey, orientation) {
+  return `${roomId}|${wallKey}|${holeOrientationKey(orientation)}`;
 }
 
 function computeShuttleWallOrientation(roomId, wallKey, transportMatrix) {
@@ -197,6 +216,114 @@ export function getShuttleWallOrientation(roomId, wallKey, transportOrientation 
   const orientation = computeShuttleWallOrientation(roomId, wallKey, transportOrientation);
   SHUTTLE_WALL_ORIENTATION_CACHE.set(cacheKey, orientation);
   return orientation;
+}
+
+function buildReachableTransportMatrices() {
+  const identitySignature = matrixSignature(IDENTITY_MATRIX);
+  const identityMatrix = TRANSPORT_MATRIX_CACHE.get(identitySignature);
+  const queue = [identityMatrix];
+  const seen = new Set();
+  const reachable = [];
+
+  while (queue.length > 0) {
+    const matrix = queue.shift();
+    const signature = matrixSignature(matrix);
+    if (seen.has(signature)) {
+      continue;
+    }
+    seen.add(signature);
+    reachable.push(matrix);
+
+    for (const roomId of ROOM_IDS) {
+      for (const wallKey of ROOM_WALL_KEYS[roomId]) {
+        const next = multiplyMatrices(matrix, getTraversalTransportMatrix(roomId, wallKey));
+        const nextSignature = matrixSignature(next);
+        queue.push(getCachedTransportMatrix(next, nextSignature));
+      }
+    }
+  }
+
+  return reachable;
+}
+
+function buildReciprocalHoleOrientationMap() {
+  const reciprocalMap = new Map();
+  const reachableTransportMatrices = buildReachableTransportMatrices();
+
+  for (const roomId of ROOM_IDS) {
+    for (const wallKey of ROOM_WALL_KEYS[roomId]) {
+      const neighbor = getNeighbor(roomId, wallKey);
+      const transportStep = getTraversalTransportMatrix(roomId, wallKey);
+
+      for (const sourceOrientation of HOLE_ORIENTATION_OPTIONS) {
+        /** @type {{h:-1|1, v:-1|1}|null} */
+        let mappedOrientation = null;
+        let matchedSourceStateCount = 0;
+
+        for (const transportMatrix of reachableTransportMatrices) {
+          const shuttleOrientation = getShuttleWallOrientation(roomId, wallKey, transportMatrix);
+          if (!sameHoleOrientation(shuttleOrientation, sourceOrientation)) {
+            continue;
+          }
+          matchedSourceStateCount += 1;
+
+          const nextTransport = multiplyMatrices(transportMatrix, transportStep);
+          const nextSignature = matrixSignature(nextTransport);
+          const cachedNextTransport = getCachedTransportMatrix(nextTransport, nextSignature);
+          const reciprocalOrientation = getShuttleWallOrientation(
+            neighbor.roomId,
+            neighbor.wallKey,
+            cachedNextTransport,
+          );
+
+          if (!reciprocalOrientation) {
+            throw new Error(
+              `Missing reciprocal shuttle orientation for ${neighbor.roomId}:${neighbor.wallKey} after ${roomId}:${wallKey}`,
+            );
+          }
+
+          if (mappedOrientation === null) {
+            mappedOrientation = reciprocalOrientation;
+            continue;
+          }
+
+          if (!sameHoleOrientation(mappedOrientation, reciprocalOrientation)) {
+            throw new Error(
+              `Inconsistent reciprocal hole mapping for ${roomId}:${wallKey} source ${holeOrientationKey(sourceOrientation)}`,
+            );
+          }
+        }
+
+        if (matchedSourceStateCount === 0 || mappedOrientation === null) {
+          throw new Error(
+            `No reciprocal hole mapping found for ${roomId}:${wallKey} source ${holeOrientationKey(sourceOrientation)}`,
+          );
+        }
+
+        reciprocalMap.set(directedHoleReciprocalKey(roomId, wallKey, sourceOrientation), {
+          h: mappedOrientation.h,
+          v: mappedOrientation.v,
+        });
+      }
+    }
+  }
+
+  return reciprocalMap;
+}
+
+const RECIPROCAL_HOLE_ORIENTATION_MAP = buildReciprocalHoleOrientationMap();
+
+export function getReciprocalHoleOrientationForTraversal(roomId, wallKey, orientation) {
+  const mapped = RECIPROCAL_HOLE_ORIENTATION_MAP.get(directedHoleReciprocalKey(roomId, wallKey, orientation));
+  if (!mapped) {
+    throw new Error(
+      `No reciprocal hole orientation mapping for ${roomId}:${wallKey} source ${holeOrientationKey(orientation)}`,
+    );
+  }
+  return {
+    h: /** @type {-1|1} */ (mapped.h),
+    v: /** @type {-1|1} */ (mapped.v),
+  };
 }
 
 export function getFrontWallForState(roomId, viewOrientation, transportOrientation, cameraForward = DEFAULT_CAMERA_FORWARD) {

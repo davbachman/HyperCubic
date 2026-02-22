@@ -273,3 +273,7 @@ Original prompt: Build a first person maze game played on the (3D) cubical faces
   - Increased master output gain and boosted per-cue envelope peaks in `/Users/davidbachman/Documents/HyperCube/src/audio/soundscape.js`.
   - Raised ambient drone and pulse modulation levels so idle pulse is clearly audible.
   - Build verification: `npm run build` passed.
+
+- Fixed holonomy regression: replaced legacy reciprocal hole h-flip rule with transport-consistent reciprocal mapping derived in mazeEvaluator and used by maze generation.
+- Updated tests/docs/debug output for transport-consistent reciprocity; added ?seed= URL param in main.js for deterministic browser checks.
+- Validation: npm test (20 tests) passed, npm run build passed, Chromium+WebKit Playwright parity probe matched on seeded traverse + reciprocal-face alignment scenario.

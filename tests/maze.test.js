@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { generateMaze } from '../src/game/maze.js';
-import { evaluateMaze } from '../src/game/mazeEvaluator.js';
+import { evaluateMaze, getReciprocalHoleOrientationForTraversal } from '../src/game/mazeEvaluator.js';
 import { EXIT_ROOM_ID, canonicalWallPair, getNeighbor, getWallsForRoom } from '../src/game/topology.js';
 
 describe('maze generation', () => {
@@ -37,7 +37,7 @@ describe('maze generation', () => {
     expect(reciprocal.type).toBe('NONE');
   });
 
-  it('mirrors normal-hole orientations across reciprocal walls', () => {
+  it('maps normal-hole orientations across reciprocal walls using transport-consistent reciprocity', () => {
     const maze = generateMaze({ seed: 9876 });
     const seenPairs = new Set();
 
@@ -56,8 +56,9 @@ describe('maze generation', () => {
         }
 
         expect(reciprocal.type).toBe('NORMAL');
-        expect(reciprocal.orientation.h).toBe(-wall.orientation.h);
-        expect(reciprocal.orientation.v).toBe(wall.orientation.v);
+        expect(reciprocal.orientation).toEqual(
+          getReciprocalHoleOrientationForTraversal(roomId, wallKey, wall.orientation),
+        );
       }
     }
   });

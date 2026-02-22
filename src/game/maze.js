@@ -6,7 +6,11 @@ import {
   getWallsForRoom,
   ROOM_IDS,
 } from './topology.js';
-import { evaluateMaze, getShuttleWallOrientation } from './mazeEvaluator.js';
+import {
+  evaluateMaze,
+  getReciprocalHoleOrientationForTraversal,
+  getShuttleWallOrientation,
+} from './mazeEvaluator.js';
 
 /** @typedef {'NORMAL'|'EXIT'|'NONE'} HoleType */
 /** @typedef {{h: -1|1, v: -1|1}} HoleOrientation */
@@ -77,10 +81,6 @@ function orientationFromCode(code) {
     h: /** @type {-1|1} */ (orientation.h),
     v: /** @type {-1|1} */ (orientation.v),
   };
-}
-
-function mirrorOrientationCodeHorizontal(code) {
-  return code ^ 2;
 }
 
 function sanitizeInt(value, fallbackValue, minimum = 1) {
@@ -295,7 +295,11 @@ function createRoomsFromCandidate(candidate) {
       toWallKey: pair.bWallKey,
     });
 
-    const reciprocalOrientation = orientationFromCode(mirrorOrientationCodeHorizontal(candidate.orientationCodes[i]));
+    const reciprocalOrientation = getReciprocalHoleOrientationForTraversal(
+      pair.aRoomId,
+      pair.aWallKey,
+      baseOrientation,
+    );
     setWall(rooms, pair.bRoomId, pair.bWallKey, {
       type: 'NORMAL',
       orientation: reciprocalOrientation,
@@ -329,13 +333,6 @@ function pickBest(records, generationConfig) {
     return null;
   }
   return [...records].sort((left, right) => compareEvaluations(left, right, generationConfig))[0];
-}
-
-export function mirrorOrientationHorizontal(orientation) {
-  return {
-    h: /** @type {-1|1} */ (-orientation.h),
-    v: orientation.v,
-  };
 }
 
 function setWall(rooms, roomId, wallKey, value) {
