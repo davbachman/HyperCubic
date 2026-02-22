@@ -85,7 +85,9 @@ export function createGame(config) {
   transportRig.add(activeRoomMesh);
 
   const shuttle = createShuttle();
-  transportRig.add(shuttle);
+  // Keep the shuttle in the view frame (turns rotate it), but do not apply
+  // traversal transport to its visual mesh or it will "snap" on room swaps.
+  roomRig.add(shuttle);
 
   let mode = MODES.START;
   let viewOrientation = [...IDENTITY_MATRIX];
