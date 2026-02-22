@@ -8,6 +8,7 @@ import {
   getAllDirectedWalls,
   getNeighbor,
   getTraversalTransportMatrix,
+  getWallsForRoom,
   ROOM_IDS,
 } from '../src/game/topology.js';
 
@@ -150,6 +151,22 @@ describe('maze evaluator', () => {
     const expected = getTraversalTransportMatrix('W+', 'Z+');
     expect(matrixSignature(nextState.transportOrientation)).toBe(matrixSignature(expected));
     expect(nextState.transportOrientation).not.toEqual(IDENTITY_MATRIX);
+  });
+
+  it('computes shuttle orientation in the transported frame', () => {
+    const transport = getTraversalTransportMatrix('W+', 'Z+');
+    const roomId = 'Z+';
+    const changedWall = getWallsForRoom(roomId).find((wallKey) => {
+      const identityOrientation = getShuttleWallOrientation(roomId, wallKey, IDENTITY_MATRIX);
+      const transportedOrientation = getShuttleWallOrientation(roomId, wallKey, transport);
+      return (
+        identityOrientation !== null &&
+        transportedOrientation !== null &&
+        (identityOrientation.h !== transportedOrientation.h || identityOrientation.v !== transportedOrientation.v)
+      );
+    });
+
+    expect(changedWall).toBeDefined();
   });
 
   it('requires aligned EXIT orientation before the final Space can win', () => {

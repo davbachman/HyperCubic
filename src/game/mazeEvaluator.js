@@ -23,12 +23,7 @@ const SHUTTLE_ARM_AXES = [
 
 const ROOM_WALL_KEYS = Object.fromEntries(ROOM_IDS.map((roomId) => [roomId, getWallsForRoom(roomId)]));
 
-const SHUTTLE_WALL_ORIENTATION = new Map();
-for (const roomId of ROOM_IDS) {
-  for (const wallKey of ROOM_WALL_KEYS[roomId]) {
-    SHUTTLE_WALL_ORIENTATION.set(`${roomId}:${wallKey}`, computeShuttleWallOrientation(roomId, wallKey));
-  }
-}
+const SHUTTLE_WALL_ORIENTATION_CACHE = new Map();
 
 const VIEW_MATRICES = [];
 const VIEW_SIGNATURE_TO_INDEX = new Map();
@@ -76,18 +71,21 @@ function dotArray(a, b) {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 }
 
-function computeShuttleWallOrientation(roomId, wallKey) {
+function computeShuttleWallOrientation(roomId, wallKey, transportMatrix) {
   const { normal, u, v } = getWallBasis(roomId, wallKey);
+  const normalInShuttleFrame = applyMatrixToVector(transportMatrix, normal);
+  const uInShuttleFrame = applyMatrixToVector(transportMatrix, u);
+  const vInShuttleFrame = applyMatrixToVector(transportMatrix, v);
   let h = 0;
   let vertical = 0;
 
   for (const armAxisLocal of SHUTTLE_ARM_AXES) {
-    if (Math.abs(dotArray(armAxisLocal, normal)) > 0.6) {
+    if (Math.abs(dotArray(armAxisLocal, normalInShuttleFrame)) > 0.6) {
       continue;
     }
 
-    const hScore = dotArray(armAxisLocal, u);
-    const vScore = dotArray(armAxisLocal, v);
+    const hScore = dotArray(armAxisLocal, uInShuttleFrame);
+    const vScore = dotArray(armAxisLocal, vInShuttleFrame);
 
     if (Math.abs(hScore) > 0.6) {
       h = hScore > 0 ? 1 : -1;
@@ -189,8 +187,16 @@ export function applyTraverseTransport(state, wallKey) {
   };
 }
 
-export function getShuttleWallOrientation(roomId, wallKey) {
-  return SHUTTLE_WALL_ORIENTATION.get(`${roomId}:${wallKey}`) ?? null;
+export function getShuttleWallOrientation(roomId, wallKey, transportOrientation = IDENTITY_MATRIX) {
+  const transportSignature = matrixSignature(transportOrientation);
+  const cacheKey = `${roomId}:${wallKey}:${transportSignature}`;
+  const cached = SHUTTLE_WALL_ORIENTATION_CACHE.get(cacheKey);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const orientation = computeShuttleWallOrientation(roomId, wallKey, transportOrientation);
+  SHUTTLE_WALL_ORIENTATION_CACHE.set(cacheKey, orientation);
+  return orientation;
 }
 
 export function getFrontWallForState(roomId, viewOrientation, transportOrientation, cameraForward = DEFAULT_CAMERA_FORWARD) {
@@ -266,7 +272,11 @@ export function evaluateMaze(maze, options = {}) {
     }
 
     const wallState = maze.rooms[state.roomId].walls[frontWallKey];
-    const shuttleOrientation = SHUTTLE_WALL_ORIENTATION.get(`${state.roomId}:${frontWallKey}`);
+    const shuttleOrientation = getShuttleWallOrientation(
+      state.roomId,
+      frontWallKey,
+      state.transportMatrix,
+    );
     const holeOrientation = wallState.type !== 'NONE' ? wallState.orientation : null;
     const aligned =
       shuttleOrientation !== null &&

@@ -152,19 +152,22 @@ export function createGame(config) {
     return candidates;
   }
 
-  function getShuttleWallOrientation(roomId, wallKey) {
+  function getShuttleWallOrientation(roomId, wallKey, transportMatrix = IDENTITY_MATRIX) {
     const { normal, u, v } = getWallBasis(roomId, wallKey);
+    const normalInShuttleFrame = applyMatrixToVector(transportMatrix, normal);
+    const uInShuttleFrame = applyMatrixToVector(transportMatrix, u);
+    const vInShuttleFrame = applyMatrixToVector(transportMatrix, v);
 
     let h = 0;
     let vertical = 0;
 
     for (const armAxisLocal of SHUTTLE_ARM_AXES) {
-      if (Math.abs(dotArray(armAxisLocal, normal)) > 0.6) {
+      if (Math.abs(dotArray(armAxisLocal, normalInShuttleFrame)) > 0.6) {
         continue;
       }
 
-      const hScore = dotArray(armAxisLocal, u);
-      const vScore = dotArray(armAxisLocal, v);
+      const hScore = dotArray(armAxisLocal, uInShuttleFrame);
+      const vScore = dotArray(armAxisLocal, vInShuttleFrame);
 
       if (Math.abs(hScore) > 0.6) {
         h = hScore > 0 ? 1 : -1;
@@ -192,7 +195,11 @@ export function createGame(config) {
 
     const frontWall = candidates[0];
     const wallState = maze.rooms[currentRoomId].walls[frontWall.wallKey];
-    const shuttleWallOrientation = getShuttleWallOrientation(currentRoomId, frontWall.wallKey);
+    const shuttleWallOrientation = getShuttleWallOrientation(
+      currentRoomId,
+      frontWall.wallKey,
+      transportOrientation,
+    );
     const holeWallOrientation =
       wallState && wallState.type !== 'NONE' && wallState.orientation ? wallState.orientation : null;
 
