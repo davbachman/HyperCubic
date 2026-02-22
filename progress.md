@@ -288,3 +288,15 @@ Original prompt: Build a first person maze game played on the (3D) cubical faces
 - Validation:
   - `npm test` passed (23 tests) in ~3.6s.
   - `npm run build` passed.
+- Added mobile touch controls:
+  - swipe left/right/up/down on the canvas maps to the corresponding room rotations,
+  - tap maps to forward action (`Space` semantics): starts from `START`, traverses when aligned during `PLAYING`.
+- Refactored `src/game/Game.js` input handling to expose `handleAction(...)` so keyboard and touch share the same state-machine path.
+- Added touch input robustness for automation/synthetic pointer events in `src/main.js` (pointer-capture calls are guarded).
+- Updated start overlay controls text and disabled browser touch gestures on the canvas (`touch-action: none`).
+- Validation:
+  - `npm test` passes.
+  - `npm run build` passes.
+  - Playwright regression run captured `/Users/davidbachman/Documents/HyperCube/output/mobile-input-regression/*`.
+  - Touch probe verified swipe-to-rotate parity with arrow keys and tap-to-traverse (`/Users/davidbachman/Documents/HyperCube/output/mobile-touch-probe/result.json`, `touch-check.png`).
+- Note: Headless Playwright mobile-emulation context failed WebGL init in this environment; touch verification used desktop viewport with touch pointer events enabled and SwiftShader launch args.

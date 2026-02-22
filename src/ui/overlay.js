@@ -7,6 +7,7 @@ export function createOverlay(root) {
         <li><strong>Left / Right</strong>: rotate room 90°</li>
         <li><strong>Up / Down</strong>: rotate room 90°</li>
         <li><strong>Space</strong>: traverse aligned hole</li>
+        <li><strong>Mobile</strong>: swipe to rotate, tap to move</li>
         <li><strong>F</strong>: toggle fullscreen</li>
         <li><strong>Enter or Space</strong>: start</li>
       </ul>

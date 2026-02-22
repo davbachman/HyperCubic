@@ -27,6 +27,15 @@ const MODES = {
   WIN: 'WIN',
 };
 
+const INPUT_ACTIONS = {
+  START: 'START',
+  ROTATE_LEFT: 'ROTATE_LEFT',
+  ROTATE_RIGHT: 'ROTATE_RIGHT',
+  ROTATE_UP: 'ROTATE_UP',
+  ROTATE_DOWN: 'ROTATE_DOWN',
+  FORWARD: 'FORWARD',
+};
+
 const SHUTTLE_ARM_AXES = [
   [1, 0, 0],
   [0, 1, 0],
@@ -431,30 +440,58 @@ export function createGame(config) {
       return;
     }
 
+    if (key === 'ArrowLeft') {
+      handleAction(INPUT_ACTIONS.ROTATE_LEFT);
+    } else if (key === 'ArrowRight') {
+      handleAction(INPUT_ACTIONS.ROTATE_RIGHT);
+    } else if (key === 'ArrowUp') {
+      handleAction(INPUT_ACTIONS.ROTATE_UP);
+    } else if (key === 'ArrowDown') {
+      handleAction(INPUT_ACTIONS.ROTATE_DOWN);
+    } else if (key === 'Enter') {
+      handleAction(INPUT_ACTIONS.START);
+    } else if (key === ' ' || key === 'Spacebar') {
+      handleAction(INPUT_ACTIONS.FORWARD);
+    }
+  }
+
+  function handleAction(action) {
     sound?.prime?.();
 
     if (mode === MODES.START) {
-      if (key === 'Enter' || key === ' ' || key === 'Spacebar') {
+      if (action === INPUT_ACTIONS.START || action === INPUT_ACTIONS.FORWARD) {
         mode = MODES.PLAYING;
+        return true;
       }
-      return;
+      return false;
     }
 
     if (mode === MODES.WIN || mode === MODES.ROTATING || mode === MODES.TRAVERSING) {
-      return;
+      return false;
     }
 
-    if (key === 'ArrowLeft') {
+    if (action === INPUT_ACTIONS.ROTATE_LEFT) {
       beginRotation('y', -1);
-    } else if (key === 'ArrowRight') {
-      beginRotation('y', 1);
-    } else if (key === 'ArrowUp') {
-      beginRotation('x', 1);
-    } else if (key === 'ArrowDown') {
-      beginRotation('x', -1);
-    } else if (key === ' ' || key === 'Spacebar') {
-      beginTraverse();
+      return true;
     }
+    if (action === INPUT_ACTIONS.ROTATE_RIGHT) {
+      beginRotation('y', 1);
+      return true;
+    }
+    if (action === INPUT_ACTIONS.ROTATE_UP) {
+      beginRotation('x', 1);
+      return true;
+    }
+    if (action === INPUT_ACTIONS.ROTATE_DOWN) {
+      beginRotation('x', -1);
+      return true;
+    }
+    if (action === INPUT_ACTIONS.FORWARD) {
+      beginTraverse();
+      return true;
+    }
+
+    return false;
   }
 
   window.addEventListener('keydown', onKeyDown, { passive: false });
@@ -541,6 +578,7 @@ export function createGame(config) {
     update,
     advanceTime,
     renderGameToText,
+    handleAction,
     dispose,
   };
 }

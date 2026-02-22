@@ -27,6 +27,11 @@ const game = createGame({
   traverseMs: 1300,
 });
 
+const TOUCH_SWIPE_MIN_PX = 28;
+
+/** @type {{ pointerId: number, startX: number, startY: number }|null} */
+let touchGesture = null;
+
 function resize() {
   sceneSystem.resize();
 }
@@ -54,6 +59,69 @@ window.advanceTime = (ms) => {
   game.advanceTime(ms);
   sceneSystem.render();
 };
+
+function handleMobileTouchAction(action) {
+  game.handleAction(action);
+}
+
+function onCanvasPointerDown(event) {
+  if (event.pointerType !== 'touch') {
+    return;
+  }
+
+  touchGesture = {
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+  };
+
+  try {
+    canvas.setPointerCapture?.(event.pointerId);
+  } catch {
+    // Synthetic events (automation) may not register an active pointer.
+  }
+  event.preventDefault();
+}
+
+function onCanvasPointerUp(event) {
+  if (event.pointerType !== 'touch' || !touchGesture || event.pointerId !== touchGesture.pointerId) {
+    return;
+  }
+
+  const dx = event.clientX - touchGesture.startX;
+  const dy = event.clientY - touchGesture.startY;
+  const absX = Math.abs(dx);
+  const absY = Math.abs(dy);
+
+  if (Math.max(absX, absY) < TOUCH_SWIPE_MIN_PX) {
+    handleMobileTouchAction('FORWARD');
+  } else if (absX >= absY) {
+    handleMobileTouchAction(dx > 0 ? 'ROTATE_RIGHT' : 'ROTATE_LEFT');
+  } else {
+    handleMobileTouchAction(dy > 0 ? 'ROTATE_DOWN' : 'ROTATE_UP');
+  }
+
+  touchGesture = null;
+  try {
+    canvas.releasePointerCapture?.(event.pointerId);
+  } catch {
+    // Synthetic events (automation) may not register an active pointer.
+  }
+  event.preventDefault();
+}
+
+function clearTouchGesture(event) {
+  if (event.pointerType !== 'touch') {
+    return;
+  }
+  if (touchGesture && event.pointerId === touchGesture.pointerId) {
+    touchGesture = null;
+  }
+}
+
+canvas.addEventListener('pointerdown', onCanvasPointerDown, { passive: false });
+canvas.addEventListener('pointerup', onCanvasPointerUp, { passive: false });
+canvas.addEventListener('pointercancel', clearTouchGesture, { passive: true });
 
 async function toggleFullscreen() {
   if (!document.fullscreenElement) {
