@@ -2,6 +2,10 @@
 
 First-person neon maze game played on the cube-cells of a 4D hypercube (tesseract). Rotate the room, align the shuttle's L-shape with the wall opening, and traverse to reach the exit.
 
+Created by David Bachman with GPT-5 Codex
+
+To learn more about David Bachman and his work visit https://pzacad.pitzer.edu/~dbachman/ and subscribe to his AI substack *Entropy Bonus* at profbachman.substack.com
+
 ## Play Online
 
 GitHub Pages: [https://davbachman.github.io/HyperCubic/](https://davbachman.github.io/HyperCubic/)
