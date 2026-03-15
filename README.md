@@ -33,19 +33,3 @@ If GitHub Pages has just been enabled, the first deployment may take a minute or
 
 - The game uses synthesized audio (WebAudio).
 - Your browser may require a first keypress (`Enter`/`Space`) before sound starts.
-
-## Run Locally
-
-```bash
-npm install
-npm run dev
-```
-
-Open the local Vite URL shown in the terminal.
-
-## Build / Test
-
-```bash
-npm test
-npm run build
-```
